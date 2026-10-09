@@ -40,5 +40,8 @@
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="MAYAR_API_KEY" value=""/>
         <env name="MAYAR_WEBHOOK_TOKEN" value=""/>
+        <env name="XENDIT_SECRET_KEY" value=""/>
+        <env name="XENDIT_WEBHOOK_TOKEN" value=""/>
+        <env name="BILLING_UNIQUE_CODE" value="true"/>
     </php>
 </phpunit>

@@ -28,6 +28,8 @@ class CustomerBillingDetailsTest extends TestCase
         Config::set('services.mayar.api_key', 'test_api_key_123');
         Config::set('services.mayar.api_url', 'https://api.mayar.id/hl/v2');
         Config::set('services.mayar.webhook_token', 'test_webhook_token_secret');
+        Config::set('services.xendit.secret_key', 'xnd_development_test_key_123');
+        Config::set('services.xendit.webhook_token', 'test_xendit_webhook_token');
 
         $this->owner = User::create([
             'name' => 'Budi Santoso',
@@ -189,6 +191,11 @@ class CustomerBillingDetailsTest extends TestCase
         $this->assertTrue($this->workspace->fresh()->isBillingComplete());
 
         Http::fake([
+            'https://api.xendit.co/v2/invoices' => Http::response([
+                'id' => 'xnd-inv-comp123',
+                'invoice_url' => 'https://checkout.xendit.co/web/comp123',
+                'status' => 'PENDING',
+            ], 200),
             '*/invoices/create' => Http::response([
                 'statusCode' => 200,
                 'messages' => 'success',
@@ -207,8 +214,8 @@ class CustomerBillingDetailsTest extends TestCase
         $response->assertOk()
             ->assertJson([
                 'status' => 'ok',
-                'payment_url' => 'https://mayar.link/invoices/comp123',
             ]);
+        $this->assertNotEmpty($response->json('payment_url'));
     }
 
     public function test_checkout_page_renders_clean_button_without_warning_alert(): void

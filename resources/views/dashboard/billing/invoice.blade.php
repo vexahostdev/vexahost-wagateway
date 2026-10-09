@@ -31,6 +31,12 @@
                 'badge' => 'Otomatis',
                 'ket' => 'QRIS, Virtual Account Multi-Bank (Mandiri, BNI, BRI, Permata, dll), E-Wallet & Retail',
             ];
+        } elseif ($mayarAvailable ?? false) {
+            $metode['mayar'] = [
+                'label' => 'Bayar Otomatis (Mayar)',
+                'badge' => 'Otomatis',
+                'ket' => 'QRIS, Virtual Account & E-Wallet via Mayar',
+            ];
         }
         if ($qrisPayload) {
             $metode['qris'] = [
@@ -46,7 +52,7 @@
                 'ket' => 'Transfer via ATM, Mobile Banking, Internet Banking rekening resmi',
             ];
         }
-        $metodeAwal = ($xenditAvailable ?? true) ? 'xendit' : ($qrisPayload ? 'qris' : ($punyaBank ? 'bank' : ''));
+        $metodeAwal = ($xenditAvailable ?? true) ? 'xendit' : (($mayarAvailable ?? false) ? 'mayar' : ($qrisPayload ? 'qris' : ($punyaBank ? 'bank' : '')));
 
         $pilihanBank = (!empty($daftarBank) && is_array($daftarBank)) ? $daftarBank : \App\Support\DaftarBank::all();
         $daftarProvinsi = (!empty($daftarProvinsi) && is_array($daftarProvinsi)) ? $daftarProvinsi : \App\Support\WilayahIndonesia::provinsi();
@@ -179,6 +185,7 @@
             xenditPaymentUrl: @json($xenditPaymentUrl ?? ''),
             billingLengkap: @json((bool)$penagihan['lengkap']),
             xenditEndpoint: @json(route('billing.invoice.xendit', $invoice->id)),
+            mayarEndpoint: @json(route('billing.invoice.mayar', $invoice->id)),
             saveBillingEndpoint: @json(route('billing.details', $invoice->id)),
             csrfToken: @json(csrf_token())
         };
@@ -195,6 +202,7 @@
         function checkoutInvoice(cfg) {
             const config = cfg || window.checkoutInvoiceData || {};
             return {
+                mobileSummaryOpen: false,
                 metode: config.metodeAwal || 'xendit',
                 copiedRekening: false,
                 copiedTotal: false,
@@ -394,6 +402,9 @@
                         }
                     });
                 },
+                bayarMayar() {
+                    this.bayarXendit();
+                },
                 bayarXendit() {
                     if (!this.billingLengkap) {
                         this.simpanDataPelangganDanLanjutkan(() => {
@@ -402,13 +413,14 @@
                         return;
                     }
 
-                    if (this.paymentUrl && this.paymentUrl.includes('xendit')) {
+                    if (this.paymentUrl && (this.paymentUrl.includes('xendit') || this.paymentUrl.includes('mayar'))) {
                         window.location.href = this.paymentUrl;
                         return;
                     }
 
                     this.paymentLoading = true;
-                    fetch(config.xenditEndpoint, {
+                    const endpoint = (this.metode === 'mayar' && config.mayarEndpoint) ? config.mayarEndpoint : config.xenditEndpoint;
+                    fetch(endpoint, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -547,7 +559,7 @@
         });
     </script>
 
-    <div x-data="checkoutInvoice(window.checkoutInvoiceData)" class="space-y-6">
+    <div x-data="checkoutInvoice(window.checkoutInvoiceData)" class="space-y-6 pb-28 sm:pb-0">
         {{-- Tombol Navigasi Kembali --}}
         <div>
             <a href="{{ route('billing.history') }}" class="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition shadow-xs">
@@ -930,10 +942,10 @@
                     
                     <div class="p-4 sm:p-5 space-y-4">
                         
-                        {{-- Header Ringkasan Biaya --}}
-                        <div class="border-b border-border/80 pb-3">
+                        {{-- Header Ringkasan Biaya (Hanya Desktop - Pada Mobile sudah ada di Floating Bottom Summary) --}}
+                        <div class="hidden lg:block border-b border-border/80 pb-3">
                             <div class="flex items-center justify-between">
-                                <h2 class="text-sm font-bold text-foreground sm:text-base">Ringkasan &amp; Pembayaran</h2>
+                                <h2 class="text-sm font-bold text-foreground sm:text-base">Ringkasan &amp; Pilih Pembayaran</h2>
                                 <span class="font-mono text-xs font-semibold text-muted-foreground">{{ $invoice->number }}</span>
                             </div>
 
@@ -1035,8 +1047,8 @@
                         {{-- MUNCULNYA PILIHAN PEMBAYARAN (Hanya setelah metode dipilih) --}}
                         
                         {{-- METODE: Otomatis (Instant Online) --}}
-                        @if ($xenditAvailable ?? true)
-                            <div x-show="metode === 'xendit'" @if($metodeAwal !== 'xendit') x-cloak @endif class="space-y-4 border-t border-border/80 pt-3.5">
+                        @if (($xenditAvailable ?? true) || ($mayarAvailable ?? false))
+                            <div x-show="metode === 'xendit' || metode === 'mayar'" @if($metodeAwal !== 'xendit' && $metodeAwal !== 'mayar') x-cloak @endif class="space-y-4 {{ count($metode) > 1 ? 'border-t border-border/80 pt-3.5' : 'lg:border-t lg:border-border/80 lg:pt-3.5' }}">
                                 <div class="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground space-y-3">
                                     <div class="flex items-start gap-2.5">
                                         <div class="rounded-lg bg-primary/10 p-2 text-primary shrink-0">
@@ -1127,7 +1139,7 @@
 
                         {{-- METODE: QRIS --}}
                         @if ($qrisPayload)
-                            <div x-show="metode === 'qris'" @if($metodeAwal !== 'qris') x-cloak @endif class="space-y-3 border-t border-border/80 pt-3.5">
+                            <div x-show="metode === 'qris'" @if($metodeAwal !== 'qris') x-cloak @endif class="space-y-3 {{ count($metode) > 1 ? 'border-t border-border/80 pt-3.5' : 'lg:border-t lg:border-border/80 lg:pt-3.5' }}">
                                 
                                 {{-- Panel QR Code (HANYA QRIS SAJA) --}}
                                 <div class="flex flex-col items-center justify-center rounded-xl border border-border bg-muted/30 p-4 text-center">
@@ -1148,7 +1160,7 @@
                         @if ($punyaBank)
                             <div x-show="metode === 'bank'" @if($metodeAwal !== 'bank') x-cloak @endif 
                                  x-data="{ bankIndex: 0 }" 
-                                 class="space-y-3 border-t border-border/80 pt-3.5">
+                                 class="space-y-3 {{ count($metode) > 1 ? 'border-t border-border/80 pt-3.5' : 'lg:border-t lg:border-border/80 lg:pt-3.5' }}">
                                 
                                 {{-- Jika ada lebih dari 1 rekening/VA, tampilkan pemilih rekening --}}
                                 @if ($daftarRekeningTujuan->count() > 1)
@@ -1357,6 +1369,166 @@
 
             </div>
 
+        </div>
+
+        {{-- ========================================================
+             MOBILE FLOATING BOTTOM NAV & INVOICE SUMMARY (< lg)
+             ======================================================== --}}
+        <!-- Backdrop Overlay saat Bottom Summary Dibuka -->
+        <div x-show="mobileSummaryOpen" x-cloak
+             x-transition:enter="transition-opacity ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click="mobileSummaryOpen = false"
+             class="lg:hidden fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-2xs z-40"></div>
+
+        <!-- Floating Bottom Nav Bar & Expandable Drawer Container -->
+        <div class="lg:hidden fixed bottom-3 sm:bottom-4 inset-x-3 sm:inset-x-4 z-50 max-w-lg mx-auto pointer-events-none">
+            <div class="pointer-events-auto bg-card/95 backdrop-blur-md border border-border/90 rounded-2xl shadow-xl shadow-slate-900/15 dark:shadow-black/40 overflow-hidden transition-all duration-300">
+                
+                <!-- Expanded Content Drawer (Buka / Tutup) -->
+                <div x-show="mobileSummaryOpen" x-cloak
+                     x-transition:enter="transition-all ease-out duration-250"
+                     x-transition:enter-start="opacity-0 -translate-y-2 max-h-0"
+                     x-transition:enter-end="opacity-100 translate-y-0 max-h-[75vh]"
+                     x-transition:leave="transition-all ease-in duration-200"
+                     x-transition:leave-start="opacity-100 translate-y-0 max-h-[75vh]"
+                     x-transition:leave-end="opacity-0 -translate-y-2 max-h-0"
+                     class="border-b border-border/80 overflow-hidden flex flex-col">
+                    
+                    <!-- Drawer Top Bar & Header -->
+                    <div class="px-4 pt-2.5 pb-2.5 bg-muted/40 border-b border-border/70 flex items-center justify-between shrink-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-primary"></span>
+                            <h3 class="text-xs font-bold text-foreground uppercase tracking-wider">Ringkasan Tagihan</h3>
+                            <span class="font-mono text-[10px] font-semibold text-muted-foreground">{{ $invoice->number }}</span>
+                        </div>
+                        <button type="button" @click="mobileSummaryOpen = false"
+                                class="w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors flex items-center justify-center cursor-pointer"
+                                aria-label="Tutup Rincian">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Drawer Scrollable Content -->
+                    <div class="p-4 space-y-3.5 max-h-[55vh] overflow-y-auto text-xs bg-card">
+                        <!-- Paket Layanan -->
+                        <div class="bg-muted/30 p-3 rounded-xl border border-border/70 space-y-2">
+                            <div class="flex justify-between items-start gap-2">
+                                <div>
+                                    <span class="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold block">Paket Langganan</span>
+                                    <span class="font-bold text-foreground text-sm block">Paket {{ $plan->name() }}</span>
+                                    <span class="text-[11px] text-muted-foreground italic">{{ $plan->tagline() }}</span>
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <span class="font-bold text-foreground text-xs block tabular-nums">Rp {{ number_format($invoice->amount, 0, ',', '.') }}</span>
+                                    <span class="text-[10px] text-muted-foreground">{{ $invoice->period === 'yearly' ? 'Tahunan' : 'Bulanan' }}</span>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-border/60 pt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span>Workspace:</span>
+                                <span class="font-semibold text-foreground">{{ ($currentWorkspace ?? $invoice->workspace)->name ?? '-' }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Rincian Biaya -->
+                        <div class="space-y-2 pt-1 text-xs">
+                            <div class="flex justify-between text-muted-foreground">
+                                <span>Subtotal Paket</span>
+                                <span class="font-medium text-foreground tabular-nums">Rp {{ number_format($invoice->amount, 0, ',', '.') }}</span>
+                            </div>
+
+                            @if ($invoice->tax_amount > 0)
+                                <div class="flex justify-between text-muted-foreground">
+                                    <span>PPN {{ rtrim(rtrim(number_format(config('billing.tax_percent'), 2, ',', '.'), '0'), ',') }}%</span>
+                                    <span class="font-medium text-foreground tabular-nums">Rp {{ number_format($invoice->tax_amount, 0, ',', '.') }}</span>
+                                </div>
+                            @endif
+
+                            @if ($invoice->intro_discount_amount > 0)
+                                <div class="flex justify-between text-muted-foreground">
+                                    <span>Promo pembelian pertama</span>
+                                    <span class="font-medium text-primary tabular-nums">−Rp {{ number_format($invoice->intro_discount_amount, 0, ',', '.') }}</span>
+                                </div>
+                            @endif
+
+                            @if ($invoice->referralDiscount() > 0)
+                                <div class="flex justify-between text-muted-foreground">
+                                    <span>Potongan referal{{ $invoice->referralCode ? ' ('.$invoice->referralCode->code.')' : '' }}</span>
+                                    <span class="font-medium text-primary tabular-nums">−Rp {{ number_format($invoice->referralDiscount(), 0, ',', '.') }}</span>
+                                </div>
+                            @endif
+
+                            @if ($invoice->unique_code > 0)
+                                <div class="flex justify-between text-muted-foreground">
+                                    <span>Kode Unik Verifikasi</span>
+                                    <span class="font-mono font-bold text-amber-600 dark:text-amber-400 tabular-nums">+Rp {{ number_format($invoice->unique_code, 0, ',', '.') }}</span>
+                                </div>
+                            @endif
+
+                            <div class="flex items-baseline justify-between border-t border-border/80 pt-2.5">
+                                <div>
+                                    <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Pembayaran</span>
+                                    @if ($invoice->unique_code > 0)
+                                        <p class="text-[10px] text-muted-foreground">Termasuk kode unik</p>
+                                    @endif
+                                </div>
+                                <p class="text-lg font-bold tracking-tight text-primary tabular-nums sm:text-xl">
+                                    Rp {{ number_format($invoice->total, 0, ',', '.') }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Tombol Tutup Rincian -->
+                        <button type="button" @click="mobileSummaryOpen = false"
+                                class="w-full py-2.5 rounded-xl bg-muted/60 hover:bg-muted active:bg-muted/80 text-foreground text-xs font-semibold transition-colors text-center cursor-pointer">
+                            Tutup Rincian
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Persistent Collapsed Floating Bar (Tampil di Bawah, Floating & Klik untuk Buka) -->
+                <button type="button"
+                        @click="mobileSummaryOpen = !mobileSummaryOpen"
+                        class="w-full px-4 py-3 flex items-center justify-between bg-card hover:bg-muted/30 active:bg-muted/50 transition-colors text-left select-none cursor-pointer">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-xl bg-foreground text-background flex items-center justify-center shrink-0 shadow-xs">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-bold text-foreground truncate">Ringkasan Tagihan</span>
+                                <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground border border-border/80 shrink-0">
+                                    {{ $plan->name() }}
+                                </span>
+                            </div>
+                            <span class="text-[11px] text-muted-foreground block truncate">
+                                {{ $invoice->period === 'yearly' ? 'Langganan 1 Tahun' : 'Langganan 1 Bulan' }} &middot; {{ ($currentWorkspace ?? $invoice->workspace)->name ?? '-' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2.5 shrink-0 pl-2">
+                        <div class="text-right">
+                            <span class="text-[10px] text-muted-foreground block leading-tight">Total</span>
+                            <span class="font-mono font-bold text-primary text-sm tabular-nums">Rp {{ number_format($invoice->total, 0, ',', '.') }}</span>
+                        </div>
+                        <div class="w-7 h-7 rounded-lg bg-muted flex items-center justify-center text-muted-foreground transition-transform duration-200"
+                             :class="mobileSummaryOpen ? 'rotate-180 bg-muted/80 text-foreground' : ''">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                            </svg>
+                        </div>
+                    </div>
+                </button>
+
+            </div>
         </div>
 
     </div>

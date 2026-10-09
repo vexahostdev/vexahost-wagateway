@@ -108,7 +108,7 @@
          yang menyusun nilainya dari beberapa variabel (`--tw-translate-x/y/z`)
          — dan di layar lebar sidebar tidak bergeser sama sekali, jadi tidak ada
          yang hilang dengan tidak memakai varian `lg:`. --}}
-    <aside class="panel-sidebar fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out"
+    <aside class="panel-sidebar fixed inset-y-0 left-0 z-50 flex w-full lg:w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out"
            :class="sidebar && 'terbuka'">
 
         <div class="flex h-20 shrink-0 items-center gap-3.5 px-5">
@@ -249,7 +249,7 @@
                          bersama email — di bilah atas ia cuma mengulang sesuatu yang
                          sudah pasti diketahui orang yang sedang login. --}}
                     <button @click="profil = ! profil"
-                            class="flex items-center gap-1.5 p-1 rounded-lg hover:bg-muted transition-colors focus:outline-none"
+                            class="flex items-center p-1 rounded-full hover:bg-muted transition-colors focus:outline-none"
                             :aria-expanded="profil" aria-haspopup="true"
                             aria-label="Menu akun" title="{{ auth()->user()->name }}">
                         <div class="rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0"
@@ -258,7 +258,6 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                         </div>
-                        <svg class="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
 
                     <div x-show="profil" x-cloak x-transition.opacity.duration.150ms

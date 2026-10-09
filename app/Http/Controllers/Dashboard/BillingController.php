@@ -328,8 +328,8 @@ class BillingController extends Controller
             'daftarProvinsi' => WilayahIndonesia::provinsi(),
             'daftarKota' => $daftarKota,
             'daftarKecamatan' => $daftarKecamatan,
-            'mayarAvailable' => false,
-            'mayarPaymentUrl' => null,
+            'mayarAvailable' => $this->mayar->isConfigured(),
+            'mayarPaymentUrl' => ($invoice->payment_gateway === 'mayar' && filled($invoice->payment_url)) ? $invoice->payment_url : null,
             'xenditAvailable' => $this->xendit->isConfigured(),
             'xenditPaymentUrl' => ($invoice->payment_gateway === 'xendit' && filled($invoice->payment_url) && str_contains((string) $invoice->payment_url, 'xendit')) ? $invoice->payment_url : null,
         ]);
@@ -409,6 +409,51 @@ class BillingController extends Controller
      */
     public function payWithMayar(Request $request, int $id): JsonResponse
     {
+        if ($this->mayar->isConfigured()) {
+            $workspace = EnsureWorkspaceSelected::from($request);
+
+            abort_unless($request->user()->canManage($workspace), 403, 'Hanya owner atau admin yang bisa mengurus pembayaran.');
+
+            $invoice = $workspace->invoices()->findOrFail($id);
+
+            if (! $workspace->isBillingComplete()) {
+                return response()->json([
+                    'status' => 'incomplete_billing',
+                    'message' => 'Lengkapi Data Pelanggan dan rekening terlebih dahulu sebelum melanjutkan pembayaran.',
+                ], 422);
+            }
+
+            if ($invoice->isPaid()) {
+                return response()->json([
+                    'status' => 'already_paid',
+                    'message' => 'Tagihan sudah lunas.',
+                    'redirect' => route('billing.invoice', $id),
+                ]);
+            }
+
+            if ($invoice->isOverdue()) {
+                return response()->json([
+                    'status' => 'expired',
+                    'message' => 'Batas waktu pembayaran sudah lewat.',
+                ], 422);
+            }
+
+            try {
+                $session = $this->mayar->createInvoice($invoice, $workspace);
+
+                return response()->json([
+                    'status' => 'ok',
+                    'payment_url' => $session['link'],
+                    'mayar_id' => $session['id'],
+                ]);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $e->getMessage(),
+                ], 500);
+            }
+        }
+
         return $this->payWithXendit($request, $id);
     }
 
