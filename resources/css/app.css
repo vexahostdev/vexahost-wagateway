@@ -174,11 +174,11 @@
         color-scheme: dark;
     }
 
-    /* Scrollbar kustom WebKit / Chromium (Chrome, Edge, Safari, Opera) */
+    /* Scrollbar kustom WebKit / Chromium (4px — Sama dengan VexaHost Client) */
     *::-webkit-scrollbar,
     ::-webkit-scrollbar {
-        width: 5px;
-        height: 5px;
+        width: 4px;
+        height: 4px;
     }
 
     *::-webkit-scrollbar-track,
@@ -188,13 +188,13 @@
 
     *::-webkit-scrollbar-thumb,
     ::-webkit-scrollbar-thumb {
-        background: rgba(156, 163, 175, 0.35);
-        border-radius: 9999px;
+        background: #E4E4E7;
+        border-radius: 4px;
     }
 
     *::-webkit-scrollbar-thumb:hover,
     ::-webkit-scrollbar-thumb:hover {
-        background: rgba(156, 163, 175, 0.6);
+        background: #D4D4D8;
     }
 
     *::-webkit-scrollbar-corner,
@@ -214,27 +214,27 @@
     html.dark ::-webkit-scrollbar-thumb,
     .dark *::-webkit-scrollbar-thumb,
     .dark ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2) !important;
-        border-radius: 9999px;
+        background: #27272A !important;
+        border-radius: 4px;
     }
 
     html.dark *::-webkit-scrollbar-thumb:hover,
     html.dark ::-webkit-scrollbar-thumb:hover,
     .dark *::-webkit-scrollbar-thumb:hover,
     .dark ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.35) !important;
+        background: #3F3F46 !important;
     }
 
     /* Firefox (tidak mendukung ::-webkit-scrollbar) */
     @supports not selector(::-webkit-scrollbar) {
         * {
             scrollbar-width: thin;
-            scrollbar-color: rgba(156, 163, 175, 0.35) transparent;
+            scrollbar-color: #E4E4E7 transparent;
         }
 
         html.dark,
         html.dark * {
-            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+            scrollbar-color: #27272A transparent;
         }
     }
 

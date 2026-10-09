@@ -108,7 +108,7 @@
          yang menyusun nilainya dari beberapa variabel (`--tw-translate-x/y/z`)
          — dan di layar lebar sidebar tidak bergeser sama sekali, jadi tidak ada
          yang hilang dengan tidak memakai varian `lg:`. --}}
-    <aside class="panel-sidebar fixed inset-y-0 left-0 z-50 flex w-full lg:w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out"
+    <aside class="panel-sidebar fixed inset-y-0 left-0 z-50 flex w-full lg:w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out"
            :class="sidebar && 'terbuka'">
 
         <div class="flex h-20 shrink-0 items-center gap-3.5 px-5">
@@ -213,7 +213,7 @@
     </aside>
 
     {{-- ===================== Isi halaman ===================== --}}
-    <div class="lg:pl-72">
+    <div class="lg:pl-64">
 
         {{-- Judul halaman tinggal di bilah atas, bukan lagi sebagai <h1> di
              dalam konten. Dengan begitu ia tetap terlihat saat halaman digulir,

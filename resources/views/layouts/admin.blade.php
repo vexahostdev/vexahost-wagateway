@@ -95,7 +95,7 @@
          Menggunakan token warna sidebar yang sama persis dengan panel user (bg-sidebar,
          border-sidebar-border, text-sidebar-foreground, dsb.) agar konsisten di light dan dark mode.
          ============================================================ --}}
-    <aside class="panel-sidebar fixed inset-y-0 left-0 z-50 flex w-full lg:w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out select-none"
+    <aside class="panel-sidebar fixed inset-y-0 left-0 z-50 flex w-full lg:w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out select-none"
            :class="sidebar && 'terbuka'">
 
         {{-- Header Sidebar: Logo & Nama Aplikasi (sama persis seperti panel user) --}}
@@ -196,7 +196,7 @@
     </aside>
 
     {{-- ===================== Isi Halaman Admin ===================== --}}
-    <div class="lg:pl-72">
+    <div class="lg:pl-64">
         <header class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md sm:px-6">
             <button @click="sidebar = true" class="-ml-1 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden" aria-label="Buka menu">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
