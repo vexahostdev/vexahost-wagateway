@@ -313,6 +313,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('billing/invoices/{id}', [BillingController::class, 'invoice'])->name('billing.invoice');
         Route::post('billing/invoices/{id}/penagihan', [BillingController::class, 'saveBillingDetails'])->name('billing.details');
         Route::post('billing/invoices/{id}/konfirmasi', [BillingController::class, 'confirmPayment'])->name('billing.invoice.confirm');
+        Route::post('billing/invoices/{id}/xendit', [BillingController::class, 'payWithXendit'])->name('billing.invoice.xendit');
         Route::post('billing/invoices/{id}/mayar', [BillingController::class, 'payWithMayar'])->name('billing.invoice.mayar');
         Route::post('billing/invoices/{id}/bukti', [BillingController::class, 'uploadProof'])->name('billing.proof.upload');
         Route::get('billing/invoices/{id}/bukti', [BillingController::class, 'proof'])->name('billing.proof');

@@ -45,7 +45,7 @@ return [
         | Kalau nilai di sini berbeda dengan env engine, yang berlaku tetap env
         | engine; yang salah cuma angka di panel.
         */
-        'max_sessions' => (int) env('WA_MAX_SESSIONS', 3),
+        'max_sessions' => (int) env('WA_MAX_SESSIONS', 100),
     ],
 
     /*

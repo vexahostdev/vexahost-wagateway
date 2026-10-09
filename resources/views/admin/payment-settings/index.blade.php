@@ -204,299 +204,124 @@
          TAB 2: PAYMENT GATEWAYS (Xendit, iPaymu, Midtrans, DOKU)
          ========================================================================= --}}
     <div x-show="tab === 'gateways'" class="space-y-6" style="display: none;">
-        <div class="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground">
-            <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 shrink-0 text-primary mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <div class="space-y-1">
-                    <p class="font-bold">Konfigurasi Gateway Siap Pakai</p>
+        {{-- Banner Status Terpadu --}}
+        <div class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-xs text-foreground sm:p-6">
+            <div class="flex items-start gap-3.5">
+                <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div class="space-y-1.5">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-base font-bold text-foreground">Sistem Gateway Tunggal Aktif: Xendit Production</h2>
+                        <span class="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            Aktif &amp; Terkonfigurasi (.env)
+                        </span>
+                    </div>
                     <p class="text-muted-foreground leading-relaxed">
-                        Anda dapat mengisi API Key, Base URL, dan secret token seluruh gateway dari sekarang. Saat akun payment gateway Anda telah disetujui, aktifkan switch "Aktifkan Gateway" untuk mulai menerima pembayaran otomatis.
+                        Seluruh alur checkout tagihan WhatsApp Gateway telah dialihkan ke <strong>Xendit Payment Gateway</strong> produksi. Kredensial dan keamanan webhook dikelola secara tersentralisasi melalui variabel lingkungan <code>.env</code> server untuk memastikan stabilitas dan keamanan tingkat tinggi.
                     </p>
                 </div>
             </div>
         </div>
 
-        <form method="POST" action="{{ route('admin.payment-settings.gateways') }}" class="space-y-6">
-            @csrf
-
-            {{-- 0. MAYAR.ID (GATEWAY UTAMA / AKTIF) --}}
-            <div class="rounded-2xl border border-primary/40 bg-card p-5 shadow-xs sm:p-6 space-y-4 ring-1 ring-primary/20">
-                <div class="flex items-center justify-between border-b border-border/80 pb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary font-bold text-sm">
-                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h2 class="text-base font-bold text-foreground">Mayar.id (Gateway Utama)</h2>
-                                <span class="rounded-full px-2.5 py-0.5 text-[10px] font-bold {{ filled($gateways['mayar']['api_key']) ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground' }}">
-                                    {{ filled($gateways['mayar']['api_key']) ? 'Tersedia' : 'Belum Terhubung' }}
-                                </span>
-                            </div>
-                            <p class="text-xs text-muted-foreground">Mendukung QRIS, Virtual Account Multi-Bank (BCA, Mandiri, BRI, BNI, Permata, dll), E-Wallet &amp; Verifikasi Otomatis 24/7</p>
-                        </div>
+        {{-- Detail Konfigurasi Xendit --}}
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 space-y-5">
+            <div class="flex items-center justify-between border-b border-border/80 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600 font-bold text-sm">
+                        X
                     </div>
-                    <label class="relative inline-flex cursor-pointer items-center" title="Aktifkan / Nonaktifkan Gateway Mayar">
-                        <input type="checkbox" name="mayar_active" value="1" @checked($gateways['mayar']['is_active']) class="peer sr-only">
-                        <div class="peer h-6 w-11 rounded-full bg-input peer-checked:bg-primary after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>
-                    </label>
+                    <div>
+                        <h3 class="text-base font-bold text-foreground">Xendit Unified Production Gateway</h3>
+                        <p class="text-xs text-muted-foreground">Otomatisasi Tagihan Langganan WA Gateway (Prefix Invoice: WAG-...)</p>
+                    </div>
                 </div>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                    <span class="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                    Ready &amp; Live
+                </span>
+            </div>
 
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div class="sm:col-span-2">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">
-                            API Key Mayar (JWT Token)
-                        </label>
-                        <input type="password" name="mayar_api_key" value="{{ $gateways['mayar']['api_key'] }}" placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-xs font-mono text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
-                        <p class="mt-1 text-xs text-muted-foreground">
-                            Dapatkan di <strong>Dashboard Mayar &gt; Integrasi &gt; API Keys</strong>. Nilai di sini akan menimpa nilai dari berkas <code>.env</code>.
-                        </p>
-                    </div>
-
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">
-                            Webhook Token / Secret (Opsional)
-                        </label>
-                        <input type="text" name="mayar_webhook_token" value="{{ $gateways['mayar']['webhook_token'] }}" placeholder="Masukkan secret webhook jika ada" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
-                        <p class="mt-1 text-xs text-muted-foreground">
-                            Token atau secret pemverifikasi tanda tangan callback webhook dari Mayar.
-                        </p>
-                    </div>
-
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">
-                            API URL / Base URL
-                        </label>
-                        <input type="text" name="mayar_api_url" value="{{ $gateways['mayar']['api_url'] }}" placeholder="https://api.mayar.id/hl/v2" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
-                        <p class="mt-1 text-xs text-muted-foreground">
-                            Default: <code>https://api.mayar.id/hl/v2</code>.
-                        </p>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div class="space-y-1">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Kredensial Secret Key (.env)</span>
+                    <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-3.5 py-2.5 font-mono text-xs">
+                        <span class="text-foreground">
+                            @if(filled(config('services.xendit.secret_key')))
+                                {{ substr(config('services.xendit.secret_key'), 0, 16) }}••••••••••••••••
+                            @else
+                                <span class="text-rose-500 font-sans">Belum diatur di .env</span>
+                            @endif
+                        </span>
+                        <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Production</span>
                     </div>
                 </div>
 
-                {{-- Webhook Callback Info --}}
-                <div class="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div class="truncate">
-                        <span class="font-medium text-muted-foreground">URL Webhook Notifikasi:</span>
-                        <code class="ml-1.5 font-mono text-primary font-semibold select-all">{{ url('/api/webhooks/mayar') }}</code>
+                <div class="space-y-1">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Internal Webhook Secret (.env)</span>
+                    <div class="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-3.5 py-2.5 font-mono text-xs">
+                        <span class="text-foreground">
+                            @if(filled(config('services.xendit.internal_secret')))
+                                {{ substr(config('services.xendit.internal_secret'), 0, 12) }}••••••
+                            @else
+                                <span class="text-amber-500 font-sans">Default internal</span>
+                            @endif
+                        </span>
+                        <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Verified</span>
                     </div>
-                    <span class="text-[11px] text-muted-foreground shrink-0">Event: <code>payment.received</code></span>
+                </div>
+
+                <div class="sm:col-span-2 space-y-1">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Internal Webhook Dispatch Endpoint (Menerima dari VexaHost Pusat)</span>
+                    <div class="rounded-xl border border-border bg-muted/30 px-3.5 py-2.5 font-mono text-xs text-foreground select-all">
+                        {{ url('/api/webhooks/payment/xendit') }}
+                    </div>
+                    <p class="text-[11px] text-muted-foreground">
+                        Notifikasi pembayaran dari Xendit diterima terpusat oleh server VexaHost dan diteruskan secara otomatis ke endpoint internal ini.
+                    </p>
                 </div>
             </div>
 
-            {{-- 1. MIDTRANS --}}
-            <div class="rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 space-y-4">
-                <div class="flex items-center justify-between border-b border-border/80 pb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/10 text-blue-600 font-bold text-sm">
-                            M
-                        </div>
-                        <div>
-                            <h2 class="text-base font-bold text-foreground">Midtrans (Snap / Core API)</h2>
-                            <p class="text-xs text-muted-foreground">Mendukung GoPay, ShopeePay, Virtual Account semua bank &amp; QRIS</p>
-                        </div>
-                    </div>
-                    <label class="relative inline-flex cursor-pointer items-center">
-                        <input type="checkbox" name="midtrans_active" value="1" @checked($gateways['midtrans']['is_active']) class="peer sr-only">
-                        <div class="peer h-6 w-11 rounded-full bg-input peer-checked:bg-primary after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>
-                    </label>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Environment</label>
-                        <select name="midtrans_environment" class="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                            <option value="sandbox" @selected($gateways['midtrans']['environment'] === 'sandbox')>Sandbox (Uji Coba)</option>
-                            <option value="production" @selected($gateways['midtrans']['environment'] === 'production')>Production (Live)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Merchant ID</label>
-                        <input type="text" name="midtrans_merchant_id" value="{{ $gateways['midtrans']['merchant_id'] }}" placeholder="G123456789" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Client Key</label>
-                        <input type="text" name="midtrans_client_key" value="{{ $gateways['midtrans']['client_key'] }}" placeholder="SB-Mid-client-..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Server Key</label>
-                        <input type="password" name="midtrans_server_key" value="{{ $gateways['midtrans']['server_key'] }}" placeholder="SB-Mid-server-..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Snap URL / Base URL</label>
-                        <input type="text" name="midtrans_snap_url" value="{{ $gateways['midtrans']['snap_url'] }}" placeholder="https://app.sandbox.midtrans.com/snap/v1" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                </div>
-
-                {{-- Webhook Callback Info --}}
-                <div class="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
-                    <div class="truncate">
-                        <span class="font-medium text-muted-foreground">URL Notifikasi Webhook:</span>
-                        <code class="ml-1.5 font-mono text-foreground select-all">{{ url('/webhooks/payment/midtrans') }}</code>
-                    </div>
+            <div class="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-2">
+                <span class="text-xs font-bold text-foreground">Saluran Pembayaran yang Didukung (Xendit Invoice Card):</span>
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">📱 QRIS Instan</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">🏦 Mandiri Virtual Account</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">🏦 BNI Virtual Account</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">🏦 BRI Virtual Account</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">🏦 Permata Virtual Account</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">🏪 Indomaret</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">💳 Kartu Debit/Kredit</span>
+                    <span class="rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">💳 Akulaku PayLater</span>
                 </div>
             </div>
+        </div>
 
-            {{-- 2. XENDIT --}}
-            <div class="rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 space-y-4">
-                <div class="flex items-center justify-between border-b border-border/80 pb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600 font-bold text-sm">
-                            X
-                        </div>
-                        <div>
-                            <h2 class="text-base font-bold text-foreground">Xendit</h2>
-                            <p class="text-xs text-muted-foreground">Mendukung Invoice Checkout, VA BCA, Mandiri, BRI, QRIS, e-Wallet</p>
-                        </div>
-                    </div>
-                    <label class="relative inline-flex cursor-pointer items-center">
-                        <input type="checkbox" name="xendit_active" value="1" @checked($gateways['xendit']['is_active']) class="peer sr-only">
-                        <div class="peer h-6 w-11 rounded-full bg-input peer-checked:bg-primary after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>
-                    </label>
+        {{-- Status Gateway Lama / Dinonaktifkan --}}
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 space-y-3">
+            <h3 class="text-sm font-bold text-foreground">Status Gateway Eksternal Lainnya</h3>
+            <p class="text-xs text-muted-foreground leading-relaxed">
+                Gateway lama (Mayar.id, Midtrans, iPaymu, DOKU) telah dinonaktifkan demi kehandalan satu akun terpusat. Form konfigurasi manual di database tidak lagi digunakan karena seluruh proses pembayaran otomatis dikendalikan oleh integrasi Xendit di berkas <code>.env</code>.
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
+                <div class="rounded-xl border border-border bg-muted/20 p-3 text-center">
+                    <span class="font-bold text-muted-foreground block">Mayar.id</span>
+                    <span class="text-[10px] text-zinc-400">Dinonaktifkan</span>
                 </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Environment</label>
-                        <select name="xendit_environment" class="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                            <option value="sandbox" @selected($gateways['xendit']['environment'] === 'sandbox')>Development / Sandbox</option>
-                            <option value="production" @selected($gateways['xendit']['environment'] === 'production')>Production</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Webhook Verification Token</label>
-                        <input type="text" name="xendit_webhook_token" value="{{ $gateways['xendit']['webhook_token'] }}" placeholder="xnd_webhook_verification_token..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Secret API Key</label>
-                        <input type="password" name="xendit_secret_key" value="{{ $gateways['xendit']['secret_key'] }}" placeholder="xnd_development_..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Public API Key</label>
-                        <input type="text" name="xendit_public_key" value="{{ $gateways['xendit']['public_key'] }}" placeholder="xnd_public_development_..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Base URL</label>
-                        <input type="text" name="xendit_base_url" value="{{ $gateways['xendit']['base_url'] }}" placeholder="https://api.xendit.co" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
+                <div class="rounded-xl border border-border bg-muted/20 p-3 text-center">
+                    <span class="font-bold text-muted-foreground block">Midtrans</span>
+                    <span class="text-[10px] text-zinc-400">Dinonaktifkan</span>
                 </div>
-
-                {{-- Webhook Callback Info --}}
-                <div class="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
-                    <div class="truncate">
-                        <span class="font-medium text-muted-foreground">URL Webhook Xendit:</span>
-                        <code class="ml-1.5 font-mono text-foreground select-all">{{ url('/webhooks/payment/xendit') }}</code>
-                    </div>
+                <div class="rounded-xl border border-border bg-muted/20 p-3 text-center">
+                    <span class="font-bold text-muted-foreground block">iPaymu</span>
+                    <span class="text-[10px] text-zinc-400">Dinonaktifkan</span>
+                </div>
+                <div class="rounded-xl border border-border bg-muted/20 p-3 text-center">
+                    <span class="font-bold text-muted-foreground block">DOKU</span>
+                    <span class="text-[10px] text-zinc-400">Dinonaktifkan</span>
                 </div>
             </div>
-
-            {{-- 3. IPAYMU (IPAYKU) --}}
-            <div class="rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 space-y-4">
-                <div class="flex items-center justify-between border-b border-border/80 pb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="grid h-10 w-10 place-items-center rounded-xl bg-amber-500/10 text-amber-600 font-bold text-sm">
-                            iP
-                        </div>
-                        <div>
-                            <h2 class="text-base font-bold text-foreground">iPaymu (iPayku)</h2>
-                            <p class="text-xs text-muted-foreground">Payment gateway lokal terpadu untuk QRIS, VA, dan transfer bank</p>
-                        </div>
-                    </div>
-                    <label class="relative inline-flex cursor-pointer items-center">
-                        <input type="checkbox" name="ipaymu_active" value="1" @checked($gateways['ipaymu']['is_active']) class="peer sr-only">
-                        <div class="peer h-6 w-11 rounded-full bg-input peer-checked:bg-primary after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>
-                    </label>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Environment</label>
-                        <select name="ipaymu_environment" class="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                            <option value="sandbox" @selected($gateways['ipaymu']['environment'] === 'sandbox')>Sandbox (sandbox.ipaymu.com)</option>
-                            <option value="production" @selected($gateways['ipaymu']['environment'] === 'production')>Production (my.ipaymu.com)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Nomor Virtual Account / Akun</label>
-                        <input type="text" name="ipaymu_va_number" value="{{ $gateways['ipaymu']['va_number'] }}" placeholder="117900..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">API Key</label>
-                        <input type="password" name="ipaymu_api_key" value="{{ $gateways['ipaymu']['api_key'] }}" placeholder="QWERTYUIOP..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Base URL</label>
-                        <input type="text" name="ipaymu_base_url" value="{{ $gateways['ipaymu']['base_url'] }}" placeholder="https://sandbox.ipaymu.com" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                </div>
-
-                {{-- Webhook Callback Info --}}
-                <div class="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
-                    <div class="truncate">
-                        <span class="font-medium text-muted-foreground">URL Callback / Webhook:</span>
-                        <code class="ml-1.5 font-mono text-foreground select-all">{{ url('/webhooks/payment/ipaymu') }}</code>
-                    </div>
-                </div>
-            </div>
-
-            {{-- 4. DOKU (JOKUL) --}}
-            <div class="rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 space-y-4">
-                <div class="flex items-center justify-between border-b border-border/80 pb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="grid h-10 w-10 place-items-center rounded-xl bg-red-500/10 text-red-600 font-bold text-sm">
-                            D
-                        </div>
-                        <div>
-                            <h2 class="text-base font-bold text-foreground">DOKU (Jokul)</h2>
-                            <p class="text-xs text-muted-foreground">Payment gateway korporat untuk direct API, checkout, dan QRIS</p>
-                        </div>
-                    </div>
-                    <label class="relative inline-flex cursor-pointer items-center">
-                        <input type="checkbox" name="doku_active" value="1" @checked($gateways['doku']['is_active']) class="peer sr-only">
-                        <div class="peer h-6 w-11 rounded-full bg-input peer-checked:bg-primary after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full"></div>
-                    </label>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Environment</label>
-                        <select name="doku_environment" class="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                            <option value="sandbox" @selected($gateways['doku']['environment'] === 'sandbox')>Sandbox</option>
-                            <option value="production" @selected($gateways['doku']['environment'] === 'production')>Production</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Client ID</label>
-                        <input type="text" name="doku_client_id" value="{{ $gateways['doku']['client_id'] }}" placeholder="BRN-0123-..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Secret Key</label>
-                        <input type="password" name="doku_secret_key" value="{{ $gateways['doku']['secret_key'] }}" placeholder="SK-..." class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-mono text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-foreground">Base URL</label>
-                        <input type="text" name="doku_base_url" value="{{ $gateways['doku']['base_url'] }}" placeholder="https://api-sandbox.doku.com" class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground transition focus:border-primary focus:outline-none">
-                    </div>
-                </div>
-
-                {{-- Webhook Callback Info --}}
-                <div class="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
-                    <div class="truncate">
-                        <span class="font-medium text-muted-foreground">URL Webhook DOKU:</span>
-                        <code class="ml-1.5 font-mono text-foreground select-all">{{ url('/webhooks/payment/doku') }}</code>
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex justify-end pt-2">
-                <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-xs font-semibold text-primary-foreground shadow-xs transition hover:opacity-90 active:scale-95">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    <span>Simpan Seluruh Gateway</span>
-                </button>
-            </div>
-        </form>
+        </div>
     </div>
 
     {{-- =========================================================================
@@ -530,7 +355,7 @@
                                         <label class="mb-1 block text-xs font-semibold text-foreground">
                                             Harga Normal Bulanan (Rp)
                                         </label>
-                                        <input type="number" step="1000" min="0" required
+                                        <input type="number" step="1" min="0" required
                                                name="plans[{{ $slug }}][price_monthly]"
                                                value="{{ old("plans.{$slug}.price_monthly", $p['price_monthly'] ?? 0) }}"
                                                class="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition focus:border-primary focus:outline-none">
@@ -540,7 +365,7 @@
                                         <label class="mb-1 block text-xs font-semibold text-foreground">
                                             Promo Perkenalan Bulan Ke-1 (Rp)
                                         </label>
-                                        <input type="number" step="1000" min="0"
+                                        <input type="number" step="1" min="0"
                                                name="plans[{{ $slug }}][intro_price_monthly]"
                                                value="{{ old("plans.{$slug}.intro_price_monthly", $p['intro_price_monthly'] ?? null) }}"
                                                placeholder="Kosongkan jika tidak ada promo"
@@ -552,7 +377,7 @@
                                         <label class="mb-1 block text-xs font-semibold text-foreground">
                                             Promo Perkenalan Tahun Ke-1 (Rp)
                                         </label>
-                                        <input type="number" step="1000" min="0"
+                                        <input type="number" step="1" min="0"
                                                name="plans[{{ $slug }}][intro_price_yearly]"
                                                value="{{ old("plans.{$slug}.intro_price_yearly", $p['intro_price_yearly'] ?? null) }}"
                                                placeholder="Kosongkan jika tidak ada promo"
@@ -596,7 +421,7 @@
 
                         <div>
                             <label class="mb-1 block text-xs font-semibold text-foreground">Minimum Nominal Isi Saldo (Rp)</label>
-                            <input type="number" step="5000" min="1000" required name="payg_min_topup"
+                            <input type="number" step="1" min="1000" required name="payg_min_topup"
                                    value="{{ old('payg_min_topup', $paygMinTopup) }}"
                                    class="w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm font-semibold text-foreground transition focus:border-primary focus:outline-none">
                             <p class="mt-1 text-[11px] text-muted-foreground">Standar saat ini: Rp 50.000.</p>

@@ -64,11 +64,20 @@ Route::prefix('v1')->middleware('apikey')->group(function (): void {
 });
 
 /*
-| Webhook dari Payment Gateway pihak ketiga (Mayar.id).
-| Terbuka ke publik tanpa auth API key workspace, menggunakan validasi token/payload internal.
+| Webhook dari Payment Gateway pihak ketiga (Xendit / Forwarder VexaHost Pusat).
+| Terbuka tanpa auth API key workspace, menggunakan validasi token internal/Xendit.
 */
+Route::match(['get', 'post'], 'payment/xendit/callback', [\App\Http\Controllers\Webhooks\XenditWebhookController::class, 'handle'])
+    ->name('api.payment.xendit.callback');
+Route::match(['get', 'post'], 'payment/xendit/webhook', [\App\Http\Controllers\Webhooks\XenditWebhookController::class, 'handle'])
+    ->name('api.payment.xendit.webhook');
+Route::match(['get', 'post'], 'webhooks/payment/xendit', [\App\Http\Controllers\Webhooks\XenditWebhookController::class, 'handle'])
+    ->name('api.webhooks.payment.xendit');
+Route::match(['get', 'post'], 'webhooks/xendit', [\App\Http\Controllers\Webhooks\XenditWebhookController::class, 'handle'])
+    ->name('api.webhooks.xendit');
 Route::post('webhooks/mayar', [MayarWebhookController::class, 'handle'])
     ->name('api.webhooks.mayar');
+
 
 /*
 | Akun tertaut dengan aplikasi vexahost — satu akun, dua aplikasi, hanya

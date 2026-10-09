@@ -54,4 +54,11 @@ return [
         'timeout' => (int) env('LINKED_ACCOUNTS_TIMEOUT', 10),
     ],
 
+    'xendit' => [
+        'secret_key' => env('XENDIT_SECRET_KEY'),
+        'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
+        'internal_secret' => env('INTERNAL_WEBHOOK_SECRET', 'vexahost_internal_xnd_token_38c92a'),
+    ],
+
 ];
+

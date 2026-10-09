@@ -25,11 +25,11 @@
         $punyaBank = $daftarRekeningTujuan->isNotEmpty();
 
         $metode = [];
-        if ($mayarAvailable ?? false) {
-            $metode['mayar'] = [
-                'label' => 'Bayar Otomatis (Mayar)',
-                'badge' => 'Instan',
-                'ket' => 'QRIS, Virtual Account Multi-Bank, & E-Wallet dengan aktivasi otomatis instan',
+        if ($xenditAvailable ?? true) {
+            $metode['xendit'] = [
+                'label' => 'Bayar Otomatis (Instan)',
+                'badge' => 'Otomatis',
+                'ket' => 'QRIS, Virtual Account Multi-Bank (Mandiri, BNI, BRI, Permata, dll), E-Wallet & Retail',
             ];
         }
         if ($qrisPayload) {
@@ -46,7 +46,7 @@
                 'ket' => 'Transfer via ATM, Mobile Banking, Internet Banking rekening resmi',
             ];
         }
-        $metodeAwal = ($mayarAvailable ?? false) ? 'mayar' : ($qrisPayload ? 'qris' : ($punyaBank ? 'bank' : ''));
+        $metodeAwal = ($xenditAvailable ?? true) ? 'xendit' : ($qrisPayload ? 'qris' : ($punyaBank ? 'bank' : ''));
 
         $pilihanBank = (!empty($daftarBank) && is_array($daftarBank)) ? $daftarBank : \App\Support\DaftarBank::all();
         $daftarProvinsi = (!empty($daftarProvinsi) && is_array($daftarProvinsi)) ? $daftarProvinsi : \App\Support\WilayahIndonesia::provinsi();
@@ -176,9 +176,9 @@
     <script>
         window.checkoutInvoiceData = {
             metodeAwal: @json($metodeAwal),
-            mayarPaymentUrl: @json($mayarPaymentUrl ?? ''),
+            xenditPaymentUrl: @json($xenditPaymentUrl ?? ''),
             billingLengkap: @json((bool)$penagihan['lengkap']),
-            mayarEndpoint: @json(route('billing.invoice.mayar', $invoice->id)),
+            xenditEndpoint: @json(route('billing.invoice.xendit', $invoice->id)),
             saveBillingEndpoint: @json(route('billing.details', $invoice->id)),
             csrfToken: @json(csrf_token())
         };
@@ -195,11 +195,11 @@
         function checkoutInvoice(cfg) {
             const config = cfg || window.checkoutInvoiceData || {};
             return {
-                metode: config.metodeAwal || 'mayar',
+                metode: config.metodeAwal || 'xendit',
                 copiedRekening: false,
                 copiedTotal: false,
-                mayarLoading: false,
-                mayarUrl: config.mayarPaymentUrl || '',
+                paymentLoading: false,
+                paymentUrl: (config.xenditPaymentUrl && String(config.xenditPaymentUrl).includes('xendit')) ? config.xenditPaymentUrl : '',
                 billingLengkap: Boolean(config.billingLengkap),
                 init() {
                     if (this.metode === 'qris') {
@@ -323,7 +323,7 @@
                         return;
                     }
 
-                    this.mayarLoading = true;
+                    this.saveBillingLoading = true;
                     const formData = new FormData(form);
 
                     fetch(config.saveBillingEndpoint || form.action, {
@@ -342,7 +342,7 @@
                             if (onSuccess) {
                                 onSuccess();
                             } else {
-                                this.mayarLoading = false;
+                                this.saveBillingLoading = false;
                                 if (window.beriTahu) {
                                     window.beriTahu({
                                         icon: 'success',
@@ -353,7 +353,7 @@
                                 }
                             }
                         } else {
-                            this.mayarLoading = false;
+                            this.saveBillingLoading = false;
                             const pesanError = (res.body && res.body.message) ? res.body.message : 'Gagal menyimpan data pelanggan. Periksa kembali form Anda.';
 
                             if (res.body && res.body.errors) {
@@ -384,7 +384,7 @@
                         }
                     })
                     .catch(err => {
-                        this.mayarLoading = false;
+                        this.saveBillingLoading = false;
                         if (window.beriTahu) {
                             window.beriTahu({
                                 icon: 'error',
@@ -394,21 +394,21 @@
                         }
                     });
                 },
-                bayarMayar() {
+                bayarXendit() {
                     if (!this.billingLengkap) {
                         this.simpanDataPelangganDanLanjutkan(() => {
-                            this.bayarMayar();
+                            this.bayarXendit();
                         });
                         return;
                     }
 
-                    if (this.mayarUrl) {
-                        window.location.href = this.mayarUrl;
+                    if (this.paymentUrl && this.paymentUrl.includes('xendit')) {
+                        window.location.href = this.paymentUrl;
                         return;
                     }
 
-                    this.mayarLoading = true;
-                    fetch(config.mayarEndpoint, {
+                    this.paymentLoading = true;
+                    fetch(config.xenditEndpoint, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -419,12 +419,12 @@
                     .then(r => r.json())
                     .then(res => {
                         if (res.status === 'ok' && res.payment_url) {
-                            this.mayarUrl = res.payment_url;
+                            this.paymentUrl = res.payment_url;
                             window.location.href = res.payment_url;
                         } else if (res.status === 'already_paid') {
                             window.location.reload();
                         } else if (res.status === 'incomplete_billing') {
-                            this.mayarLoading = false;
+                            this.paymentLoading = false;
                             this.billingLengkap = false;
                             this.tandaiFormKosong();
                             if (window.Swal) {
@@ -446,25 +446,26 @@
                                 });
                             }
                         } else {
-                            this.mayarLoading = false;
+                            this.paymentLoading = false;
+                            const pesanError = res.message || 'Gagal memuat sesi pembayaran. Silakan coba beberapa saat lagi.';
                             if (window.Swal) {
                                 Swal.fire({
                                     icon: 'error',
                                     title: 'Gagal Memuat Pembayaran',
-                                    text: res.message || 'Gagal memuat sesi pembayaran Mayar.',
+                                    text: pesanError,
                                     confirmButtonColor: '#2563eb'
                                 });
                             } else if (window.beriTahu) {
                                 window.beriTahu({
                                     icon: 'error',
                                     title: 'Gagal Memuat Pembayaran',
-                                    text: res.message || 'Gagal memuat sesi pembayaran Mayar.'
+                                    text: pesanError
                                 });
                             }
                         }
                     })
                     .catch(err => {
-                        this.mayarLoading = false;
+                        this.paymentLoading = false;
                         if (window.Swal) {
                             Swal.fire({
                                 icon: 'error',
@@ -1033,9 +1034,9 @@
 
                         {{-- MUNCULNYA PILIHAN PEMBAYARAN (Hanya setelah metode dipilih) --}}
                         
-                        {{-- METODE: Mayar (Otomatis) --}}
-                        @if ($mayarAvailable ?? false)
-                            <div x-show="metode === 'mayar'" @if($metodeAwal !== 'mayar') x-cloak @endif class="space-y-4 border-t border-border/80 pt-3.5">
+                        {{-- METODE: Otomatis (Instant Online) --}}
+                        @if ($xenditAvailable ?? true)
+                            <div x-show="metode === 'xendit'" @if($metodeAwal !== 'xendit') x-cloak @endif class="space-y-4 border-t border-border/80 pt-3.5">
                                 <div class="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs text-foreground space-y-3">
                                     <div class="flex items-start gap-2.5">
                                         <div class="rounded-lg bg-primary/10 p-2 text-primary shrink-0">
@@ -1046,7 +1047,7 @@
                                         <div class="space-y-1">
                                             <h4 class="font-bold text-foreground">Pembayaran Instan &amp; Otomatis</h4>
                                             <p class="text-muted-foreground text-[11px] leading-relaxed">
-                                                Dukung QRIS (BCA, Mandiri, GoPay, OVO, Dana, ShopeePay), Virtual Account Bank otomatis, serta gerai retail.
+                                                Dukung QRIS (BCA, Mandiri, GoPay, OVO, Dana, ShopeePay), Virtual Account Bank otomatis (Mandiri, BNI, BRI, Permata, dll), serta gerai retail.
                                                 Layanan aktif otomatis dalam hitungan detik setelah pembayaran berhasil.
                                             </p>
                                         </div>
@@ -1058,10 +1059,10 @@
                                             <svg class="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                                             </svg>
-                                            <span>Catatan Pembayaran</span>
+                                            <span>Keamanan Transaksi Terjamin</span>
                                         </div>
                                         <p class="text-muted-foreground text-[11px] leading-relaxed">
-                                            Demi keamanan transaksi Anda, sistem pembayaran kami diproses secara resmi oleh mitra payment gateway berlisensi Bank Indonesia (<strong>Mayar / Xendit</strong>). Nama tujuan transfer/QRIS yang muncul di aplikasi m-banking atau e-wallet adalah <strong>PT Mayar / Xendit</strong>, dan dana dipastikan 100% masuk ke rekening resmi <strong>VEXAHOST</strong>.
+                                            Sistem pembayaran kami diproses secara resmi melalui payment gateway berlisensi Bank Indonesia. Transaksi Anda diverifikasi langsung 24 jam dan terhubung aman dengan sistem VexaHost.
                                         </p>
                                     </div>
 
@@ -1072,17 +1073,17 @@
 
                                     <div class="pt-1 space-y-2">
                                         <button type="button" 
-                                                @click="bayarMayar()"
-                                                :disabled="mayarLoading"
-                                                class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-xs sm:text-sm font-bold text-primary-foreground shadow-md active:scale-[0.98] transition-all hover:opacity-95 disabled:opacity-50">
-                                            <template x-if="mayarLoading">
+                                                @click="bayarXendit()"
+                                                :disabled="paymentLoading"
+                                                class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-xs sm:text-sm font-bold text-primary-foreground shadow-md active:scale-[0.98] transition-all hover:opacity-95 disabled:opacity-50 cursor-pointer">
+                                            <template x-if="paymentLoading">
                                                 <svg class="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
                                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                                                 </svg>
                                             </template>
-                                            <span x-text="mayarLoading ? 'Membuka Pembayaran...' : 'Pilih Pembayaran'">Pilih Pembayaran</span>
-                                            <svg x-show="!mayarLoading" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                                            <span x-text="paymentLoading ? 'Memproses Pembayaran...' : 'Bayar Sekarang'">Bayar Sekarang</span>
+                                            <svg x-show="!paymentLoading" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
                                         </button>
                                     </div>
 
@@ -1253,7 +1254,7 @@
 
                         {{-- Peringatan Kode Unik (Hanya jika metode manual dipilih) --}}
                         @if ($invoice->unique_code > 0 && $metode !== [])
-                            <div x-show="metode && metode !== 'mayar'" @if(!$metodeAwal || $metodeAwal === 'mayar') x-cloak @endif class="flex gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-100 shadow-xs">
+                            <div x-show="metode && metode !== 'xendit'" @if(!$metodeAwal || $metodeAwal === 'xendit') x-cloak @endif class="flex gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-100 shadow-xs">
                                 <svg class="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                                     <line x1="12" y1="9" x2="12" y2="13"/>
@@ -1284,14 +1285,14 @@
                                             Sistem sedang memeriksa mutasi pembayaran Anda secara otomatis.
                                         </p>
                                         <a href="{{ route('billing.verifying', $invoice->id) }}" 
-                                           class="inline-flex items-center justify-center gap-1.5 w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-xs transition hover:opacity-90">
+                                            class="inline-flex items-center justify-center gap-1.5 w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-xs transition hover:opacity-90">
                                             <span>Buka Layar Status Verifikasi</span>
                                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
                                         </a>
                                     </div>
                                 @else
                                     {{-- Form Konfirmasi "Saya Sudah Bayar" (Hanya untuk metode manual) --}}
-                                    <div x-show="metode !== 'mayar'" class="space-y-3.5">
+                                    <div x-show="metode !== 'xendit'" class="space-y-3.5">
                                         <div class="flex items-center gap-2">
                                             <span class="grid h-5 w-5 place-items-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground">
                                                 ✓

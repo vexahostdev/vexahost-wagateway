@@ -36,7 +36,9 @@ class BillingController extends Controller
         private readonly ReferralService $referrals,
         private readonly EmailNotifier $email,
         private readonly MayarService $mayar,
+        private readonly \App\Services\Payment\XenditService $xendit,
     ) {}
+
 
     /**
      * Ringkasan langganan.
@@ -273,6 +275,12 @@ class BillingController extends Controller
 
         $invoice = $workspace->invoices()->findOrFail($id);
 
+        if ($invoice->isPending() && $invoice->payment_gateway === 'xendit' && filled($invoice->payment_reference)) {
+            if ($this->xendit->checkAndSyncStatus($invoice, $this->subscriptions)) {
+                $invoice->refresh();
+            }
+        }
+
         $selectedProvince = old('billing_province', $workspace->billing_province);
         $selectedCity = old('billing_city', $workspace->billing_city);
 
@@ -320,15 +328,17 @@ class BillingController extends Controller
             'daftarProvinsi' => WilayahIndonesia::provinsi(),
             'daftarKota' => $daftarKota,
             'daftarKecamatan' => $daftarKecamatan,
-            'mayarAvailable' => $this->mayar->isConfigured(),
-            'mayarPaymentUrl' => $invoice->payment_url,
+            'mayarAvailable' => false,
+            'mayarPaymentUrl' => null,
+            'xenditAvailable' => $this->xendit->isConfigured(),
+            'xenditPaymentUrl' => ($invoice->payment_gateway === 'xendit' && filled($invoice->payment_url) && str_contains((string) $invoice->payment_url, 'xendit')) ? $invoice->payment_url : null,
         ]);
     }
 
     /**
-     * Memulai sesi pembayaran via gateway Mayar.id.
+     * Memulai sesi pembayaran via gateway online resmi Xendit.
      */
-    public function payWithMayar(Request $request, int $id): JsonResponse
+    public function payWithXendit(Request $request, int $id): JsonResponse
     {
         $workspace = EnsureWorkspaceSelected::from($request);
 
@@ -358,29 +368,48 @@ class BillingController extends Controller
             ], 422);
         }
 
-        if (! $this->mayar->isConfigured()) {
-            return response()->json([
-                'status' => 'gateway_disabled',
-                'message' => 'Metode pembayaran online sedang tidak aktif.',
-            ], 422);
-        }
-
-        try {
-            $session = $this->mayar->createInvoice($invoice, $workspace);
-
-            return response()->json([
-                'status' => 'ok',
-                'payment_url' => $session['link'],
-                'mayar_id' => $session['id'],
+        // Jika tagihan memiliki payment_url dari gateway lama (seperti Mayar), reset terlebih dahulu
+        if ($invoice->payment_gateway !== 'xendit' || !str_contains((string) $invoice->payment_url, 'xendit')) {
+            $invoice->update([
+                'payment_gateway' => null,
+                'payment_url' => null,
+                'payment_reference' => null,
             ]);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal membuat sesi pembayaran: '.$e->getMessage(),
-            ], 500);
+            $invoice->refresh();
         }
+
+        // XENDIT PAYMENT GATEWAY
+        if ($this->xendit->isConfigured()) {
+            try {
+                $session = $this->xendit->createInvoice($invoice, $workspace);
+
+                return response()->json([
+                    'status' => 'ok',
+                    'payment_url' => $session['link'],
+                    'xendit_id' => $session['id'],
+                ]);
+            } catch (\Throwable $e) {
+                report($e);
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Gagal membuat sesi pembayaran Xendit: '.$e->getMessage(),
+                ], 500);
+            }
+        }
+
+        return response()->json([
+            'status' => 'gateway_disabled',
+            'message' => 'Metode pembayaran online Xendit sedang tidak aktif.',
+        ], 422);
+    }
+
+    /**
+     * Alias untuk backwards compatibility route billing.invoice.mayar.
+     */
+    public function payWithMayar(Request $request, int $id): JsonResponse
+    {
+        return $this->payWithXendit($request, $id);
     }
 
     /**
@@ -672,6 +701,12 @@ class BillingController extends Controller
         $workspace = EnsureWorkspaceSelected::from($request);
 
         $invoice = $workspace->invoices()->findOrFail($id);
+
+        if ($invoice->isPending() && $invoice->payment_gateway === 'xendit' && filled($invoice->payment_reference)) {
+            if ($this->xendit->checkAndSyncStatus($invoice, $this->subscriptions)) {
+                $invoice->refresh();
+            }
+        }
 
         return response()->json([
             'status' => $invoice->status,
