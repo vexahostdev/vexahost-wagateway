@@ -38,6 +38,14 @@ class AppServiceProvider extends ServiceProvider
         // Setiap perubahan identitas masuk ikut dikirim ke aplikasi vexahost,
         // dari jalur mana pun perubahannya datang. Lihat docs/AKUN_TERTAUT.md.
         User::observe(LinkedAccountObserver::class);
+
+        // Listener MessageSending: pengaman untuk memastikan Reply-To selalu terisi
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Mail\Events\MessageSending::class, function (\Illuminate\Mail\Events\MessageSending $event) {
+            if (empty($event->message->getReplyTo())) {
+                $replyTo = \App\Support\MailIdentity::replyTo();
+                $event->message->replyTo(new \Symfony\Component\Mime\Address($replyTo['address'], $replyTo['name']));
+            }
+        });
     }
 
     /**

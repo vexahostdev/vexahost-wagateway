@@ -321,10 +321,11 @@ class MitraController extends Controller
             $this->notifier->toPhone($targetWaUser, $pesanWaUser, media: $pdfMedia);
         }
 
-        // 3. Notifikasi Email ke Admin (Gmail / Brevo, disertakan lampiran PDF)
+        // 3. Notifikasi Email ke Admin (disertakan lampiran PDF)
         try {
-            $adminEmail = config('billing.support_email', 'vexahostcloudtech@gmail.com');
-            Mail::to($adminEmail)->send(new PayoutRequestedMail($payout, isForAdmin: true));
+            foreach (\App\Support\MailIdentity::adminRecipients() as $adminEmail) {
+                Mail::to($adminEmail)->send(new PayoutRequestedMail($payout, isForAdmin: true));
+            }
         } catch (\Throwable $e) {
             // Kegagalan email tidak membatalkan pengajuan pencairan
         }

@@ -213,7 +213,7 @@
                 <div class="company-sub">PT DESTINARA CHAKRAWALA ARTHA</div>
                 <div class="company-meta">
                     Layanan WhatsApp API Gateway &amp; Enterprise Messaging Platform<br>
-                    Email: vexahostcloudtech@gmail.com &bull; Web: https://wa.vexahostcloud.my.id
+                    Email: {{ \App\Support\MailIdentity::contactEmail() }} &bull; Web: https://wa.vexahostcloud.my.id
                 </div>
             </td>
             <td style="text-align: right; vertical-align: top;">

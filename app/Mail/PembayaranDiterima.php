@@ -20,7 +20,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class PembayaranDiterima extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, \App\Mail\Concerns\PakaiIdentitasEmail;
 
     public function __construct(
         public readonly Invoice $invoice,
@@ -29,8 +29,9 @@ class PembayaranDiterima extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(
+        return $this->buatEnvelope(
             subject: "Pembayaran diterima — {$this->invoice->number}",
+            tipePengirim: 'noreply',
         );
     }
 

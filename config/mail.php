@@ -111,8 +111,22 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
+        'address' => env('MAIL_FROM_ADDRESS', 'noreply@vexahostcloud.my.id'),
+        'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'VexaHost WA Gateway')),
     ],
+
+    'reply_to' => [
+        'address' => env('MAIL_REPLY_TO_ADDRESS', env('MAIL_SUPPORT_ADDRESS', 'support@vexahostcloud.my.id')),
+        'name' => env('MAIL_SUPPORT_NAME', 'VexaHost WA Gateway Support'),
+    ],
+
+    'support' => [
+        'address' => env('MAIL_SUPPORT_ADDRESS', 'support@vexahostcloud.my.id'),
+        'name' => env('MAIL_SUPPORT_NAME', 'VexaHost WA Gateway Support'),
+    ],
+
+    'admin_addresses' => array_values(array_filter(array_map('trim', explode(',', (string) env('MAIL_ADMIN_ADDRESSES', 'support@vexahostcloud.my.id,vexahostcloudtech@gmail.com'))))),
+
+    'allowed_sender_domains' => array_values(array_filter(array_map('trim', explode(',', (string) env('MAIL_ALLOWED_SENDER_DOMAINS', 'vexahostcloud.my.id'))))),
 
 ];

@@ -49,7 +49,7 @@
                     <p class="text-xs font-semibold text-primary uppercase tracking-wider">PT DESTINARA CHAKRAWALA ARTHA</p>
                     <p class="mt-1 text-xs text-muted-foreground leading-relaxed">
                         Layanan WhatsApp API Gateway &amp; Enterprise Messaging<br>
-                        Email: vexahostcloudtech@gmail.com &bull; Web: wa.vexahostcloud.my.id
+                        Email: {{ \App\Support\MailIdentity::contactEmail() }} &bull; Web: wa.vexahostcloud.my.id
                     </p>
                 </div>
             </div>

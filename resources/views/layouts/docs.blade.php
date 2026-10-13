@@ -470,7 +470,7 @@
                         <li><a href="https://vexahostcloud.my.id" target="_blank" rel="noopener" class="text-muted-foreground hover:text-foreground transition-colors">Tentang Kami</a></li>
                         <li><a href="{{ route('enterprise') }}" class="text-muted-foreground hover:text-foreground transition-colors">Hubungi Sales</a></li>
                         <li><a href="{{ route('docs.show', 'bantuan') }}" class="text-muted-foreground hover:text-foreground transition-colors">Pusat Bantuan</a></li>
-                        <li><a href="mailto:vexahostcloudtech@gmail.com" class="text-muted-foreground hover:text-foreground transition-colors break-all">vexahostcloudtech@gmail.com</a></li>
+                        <li><a href="mailto:{{ \App\Support\MailIdentity::contactEmail() }}" class="text-muted-foreground hover:text-foreground transition-colors break-all">{{ \App\Support\MailIdentity::contactEmail() }}</a></li>
                         <li><a href="{{ \App\Support\KontakWhatsApp::tautan() }}" target="_blank" rel="noopener" class="text-muted-foreground hover:text-foreground transition-colors">WhatsApp Helpdesk</a></li>
                         <li><a href="{{ route('docs.show', 'kebijakan-privasi') }}" class="text-muted-foreground hover:text-foreground transition-colors">Kebijakan Privasi</a></li>
                     </ul>

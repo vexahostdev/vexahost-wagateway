@@ -23,7 +23,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class MasaBerlakuHabis extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, \App\Mail\Concerns\PakaiIdentitasEmail;
 
     public function __construct(
         public readonly Subscription $subscription,
@@ -34,11 +34,14 @@ class MasaBerlakuHabis extends Mailable
     {
         $nama = $this->subscription->workspace?->name;
 
-        return new Envelope(subject: match (true) {
-            $this->sisaHari <= 0 => "Langganan {$nama} berakhir hari ini",
-            $this->sisaHari === 1 => "Langganan {$nama} berakhir besok",
-            default => "Langganan {$nama} berakhir {$this->sisaHari} hari lagi",
-        });
+        return $this->buatEnvelope(
+            subject: match (true) {
+                $this->sisaHari <= 0 => "Langganan {$nama} berakhir hari ini",
+                $this->sisaHari === 1 => "Langganan {$nama} berakhir besok",
+                default => "Langganan {$nama} berakhir {$this->sisaHari} hari lagi",
+            },
+            tipePengirim: 'noreply',
+        );
     }
 
     public function content(): Content
