@@ -175,18 +175,33 @@ class EmailNotifier
      * antarmuka mana pun** — persis bentuk kegagalan notifikasi WhatsApp yang
      * diam. Tanpa tombol ini, satu-satunya cara menemukannya adalah menunggu
      * peristiwa penagihan sungguhan, dan yang menemukannya jadi pelanggan yang
-     * tidak dikabari.
      *
      * Sengaja TIDAK memakai penanda sekali-kirim, dan sengaja melaporkan galat
      * yang biasanya ditelan: di sinilah satu-satunya tempat pesan galat SMTP
      * justru yang paling dicari orang.
      *
+     * @param string|array<int, string> $tujuan
      * @return array{berhasil: bool, pesan: string}
      */
-    public function kirimTes(string $tujuan, string $tipe = 'noreply'): array
+    public function kirimTes(string|array $tujuan, string $tipe = 'noreply'): array
     {
-        if (! filter_var($tujuan, FILTER_VALIDATE_EMAIL)) {
+        $recipients = is_array($tujuan)
+            ? $tujuan
+            : array_map('trim', explode(',', $tujuan));
+
+        $recipients = array_values(array_unique(array_filter(
+            $recipients,
+            fn ($item) => is_string($item) && $item !== ''
+        )));
+
+        if (empty($recipients)) {
             return ['berhasil' => false, 'pesan' => 'Alamat email tujuan tidak sah.'];
+        }
+
+        foreach ($recipients as $alamat) {
+            if (! filter_var($alamat, FILTER_VALIDATE_EMAIL)) {
+                return ['berhasil' => false, 'pesan' => "Alamat email '{$alamat}' tidak sah."];
+            }
         }
 
         if (! $this->ready()) {
@@ -204,21 +219,46 @@ class EmailNotifier
 
         $sender = $tipe === 'support' ? \App\Support\MailIdentity::support() : \App\Support\MailIdentity::noreply();
 
-        try {
-            Mail::to($tujuan)->send(new TesEmail($tipe));
-        } catch (\Throwable $e) {
-            Log::warning('Tes email gagal', ['error' => $e->getMessage()]);
+        $terkirim = [];
+        $gagal = [];
+
+        foreach ($recipients as $alamat) {
+            try {
+                Mail::to($alamat)->send(new TesEmail($tipe));
+                $terkirim[] = $alamat;
+            } catch (\Throwable $e) {
+                Log::warning('Tes email gagal', ['tujuan' => $alamat, 'error' => $e->getMessage()]);
+                $gagal[$alamat] = $e->getMessage();
+            }
+        }
+
+        if (! empty($gagal) && empty($terkirim)) {
+            $firstError = reset($gagal);
 
             // Pesan mentahnya sengaja ikut. Kegagalan Brevo yang paling sering
             // — pengirim belum diverifikasi — hanya bisa dikenali dari kode
             // 550 di dalamnya, dan halaman ini cuma dilihat admin kami sendiri.
-            return ['berhasil' => false, 'pesan' => str_contains($e->getMessage(), '550')
+            return ['berhasil' => false, 'pesan' => str_contains($firstError, '550')
                 ? 'Server SMTP menolak pengirimnya (550). Alamat '.$sender['address']
-                    .' kemungkinan belum diverifikasi sebagai sender di Brevo. Galat lengkap: '.$e->getMessage()
-                : 'Gagal mengirim: '.$e->getMessage()];
+                    .' kemungkinan belum diverifikasi sebagai sender di Brevo. Galat lengkap: '.$firstError
+                : 'Gagal mengirim: '.$firstError];
         }
 
-        return ['berhasil' => true, 'pesan' => "Email terkirim ke {$tujuan} (tipe: {$tipe}) lewat "
+        if (! empty($gagal) && ! empty($terkirim)) {
+            $suksesText = implode(', ', $terkirim);
+            $gagalText = implode(', ', array_keys($gagal));
+
+            return [
+                'berhasil' => true,
+                'pesan' => "Email terkirim ke {$suksesText}, namun gagal ke {$gagalText} lewat "
+                    .config('mail.mailers.'.config('mail.default').'.host', config('mail.default'))
+                    .'. Kalau tidak sampai dalam beberapa menit, periksa folder spam dan status pengirim di Brevo.',
+            ];
+        }
+
+        $tujuanText = implode(', ', $terkirim);
+
+        return ['berhasil' => true, 'pesan' => "Email terkirim ke {$tujuanText} (tipe: {$tipe}) lewat "
             .config('mail.mailers.'.config('mail.default').'.host', config('mail.default'))
             .'. Kalau tidak sampai dalam beberapa menit, periksa folder spam dan status pengirim di Brevo.'];
     }
