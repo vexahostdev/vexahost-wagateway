@@ -174,15 +174,15 @@
             @csrf
             <label for="tes_email" class="mb-1 block text-sm font-medium">Kirim email tes</label>
             <div class="flex flex-wrap gap-2">
-                <input id="tes_email" name="email" required maxlength="180" type="email" inputmode="email"
-                       value="{{ old('email', $emailAdmin) }}" placeholder="nama@contoh.id"
+                <input id="tes_email" name="email" required maxlength="500" type="email" multiple inputmode="email"
+                       value="{{ old('email', $emailAdmin) }}" placeholder="nama@contoh.id, admin@contoh.id"
                        class="min-w-48 flex-1 rounded-lg border-border bg-background text-sm focus:border-primary focus:ring-primary">
                 <button class="rounded-lg border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
                     Kirim tes
                 </button>
             </div>
             <p class="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Dikirim seketika, bukan lewat antrean — email yang mengantre menjawab "berhasil" sebelum
+                Bisa memasukkan lebih dari satu email (pisahkan dengan koma). Dikirim seketika, bukan lewat antrean — email yang mengantre menjawab "berhasil" sebelum
                 ada satu pun sambungan SMTP dibuka, dan itu kebalikan dari gunanya tombol ini.
                 Kalau gagal, pesan galatnya menyebutkan langkah mana yang belum selesai.
             </p>

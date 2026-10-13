@@ -203,6 +203,41 @@ class EmailNotifikasiTest extends TestCase
         Mail::assertSent(TesEmail::class, fn ($surat) => $surat->hasTo('orang@contoh.id'));
     }
 
+    public function test_tombol_kirim_email_tes_bisa_ke_banyak_penerima(): void
+    {
+        $admin = User::create([
+            'name' => 'VexaHost Finance',
+            'email' => 'finance@vexahostcloud.my.id',
+            'password' => Hash::make('rahasia12345'),
+            'is_super_admin' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/admin/pengecualian/email/tes', [
+                'email' => 'support@vexahostcloud.my.id, vexahostcloudtech@gmail.com',
+            ])
+            ->assertRedirect();
+
+        Mail::assertSent(TesEmail::class, fn ($surat) => $surat->hasTo('support@vexahostcloud.my.id'));
+        Mail::assertSent(TesEmail::class, fn ($surat) => $surat->hasTo('vexahostcloudtech@gmail.com'));
+    }
+
+    public function test_tombol_kirim_email_tes_menolak_salah_satu_email_tidak_sah(): void
+    {
+        $admin = User::create([
+            'name' => 'VexaHost Finance',
+            'email' => 'finance@vexahostcloud.my.id',
+            'password' => Hash::make('rahasia12345'),
+            'is_super_admin' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/admin/pengecualian/email/tes', [
+                'email' => 'support@vexahostcloud.my.id, bukan-email',
+            ])
+            ->assertSessionHasErrors('email');
+    }
+
     /**
      * Keempat template benar-benar bisa dirender.
      *
