@@ -261,7 +261,31 @@ class ExemptionController extends Controller
     public function testEmail(Request $request, EmailNotifier $email): RedirectResponse
     {
         $data = $request->validate([
-            'email' => ['required', 'email', 'max:180'],
+            'email' => [
+                'required',
+                'string',
+                'max:500',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $list = array_values(array_filter(
+                        array_map('trim', explode(',', (string) $value)),
+                        fn ($item) => $item !== ''
+                    ));
+
+                    if (empty($list)) {
+                        $fail('Alamat email tujuan wajib diisi.');
+
+                        return;
+                    }
+
+                    foreach ($list as $alamat) {
+                        if (! filter_var($alamat, FILTER_VALIDATE_EMAIL)) {
+                            $fail("Format alamat email '{$alamat}' tidak sah.");
+
+                            return;
+                        }
+                    }
+                },
+            ],
         ]);
 
         $hasil = $email->kirimTes($data['email']);
