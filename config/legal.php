@@ -66,12 +66,12 @@ return [
     'hosting_region' => env('LEGAL_HOSTING_REGION', 'Singapura'),
 
     'contact' => [
-        'email' => env('LEGAL_CONTACT_EMAIL', env('BILLING_SUPPORT_EMAIL', 'vexahostcloudtech@gmail.com')),
+        'email' => env('LEGAL_CONTACT_EMAIL', env('BILLING_SUPPORT_EMAIL', env('MAIL_SUPPORT_ADDRESS', 'support@vexahostcloud.my.id'))),
 
         // Alamat khusus urusan data pribadi. Dipisah dari email dukungan karena
         // UU PDP memberi tenggat 3×24 jam untuk permintaan subjek data, dan
         // permintaan seperti itu tidak boleh antre di belakang pertanyaan teknis.
-        'privacy_email' => env('LEGAL_PRIVACY_EMAIL', env('BILLING_SUPPORT_EMAIL', 'vexahostcloudtech@gmail.com')),
+        'privacy_email' => env('LEGAL_PRIVACY_EMAIL', env('BILLING_SUPPORT_EMAIL', env('MAIL_SUPPORT_ADDRESS', 'support@vexahostcloud.my.id'))),
     ],
 
     /*

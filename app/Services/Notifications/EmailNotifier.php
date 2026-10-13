@@ -63,7 +63,9 @@ class EmailNotifier
             return false;
         }
 
-        return filled(config('mail.from.address'));
+        $noreply = \App\Support\MailIdentity::noreply();
+
+        return filled($noreply['address']);
     }
 
     /** Alamat penagihan workspace, dengan email pemiliknya sebagai cadangan. */
@@ -137,16 +139,32 @@ class EmailNotifier
         return $this->toAdmin(new KabarTim($judul, $isi, $tautan), $sekali);
     }
 
-    /** Mengirim ke alamat tim kami sendiri. */
+    /** Mengirim ke semua alamat tim / admin kami sendiri. */
     public function toAdmin(Mailable $surat, ?string $sekali = null, int $ingatJam = 24): bool
     {
-        $alamat = config('billing.support_email');
-
-        if (blank($alamat)) {
+        $penanda = $sekali ? "email-notif:{$sekali}" : null;
+        if ($penanda && Cache::has($penanda)) {
             return false;
         }
 
-        return $this->send($alamat, $surat, $sekali, $ingatJam);
+        $recipients = \App\Support\MailIdentity::adminRecipients();
+
+        if (empty($recipients)) {
+            return false;
+        }
+
+        $anySuccess = false;
+        foreach ($recipients as $alamat) {
+            if ($this->send($alamat, clone $surat, null, $ingatJam)) {
+                $anySuccess = true;
+            }
+        }
+
+        if ($anySuccess && $penanda) {
+            Cache::put($penanda, true, now()->addHours($ingatJam));
+        }
+
+        return $anySuccess;
     }
 
     /**
@@ -165,7 +183,7 @@ class EmailNotifier
      *
      * @return array{berhasil: bool, pesan: string}
      */
-    public function kirimTes(string $tujuan): array
+    public function kirimTes(string $tujuan, string $tipe = 'noreply'): array
     {
         if (! filter_var($tujuan, FILTER_VALIDATE_EMAIL)) {
             return ['berhasil' => false, 'pesan' => 'Alamat email tujuan tidak sah.'];
@@ -184,8 +202,10 @@ class EmailNotifier
             }];
         }
 
+        $sender = $tipe === 'support' ? \App\Support\MailIdentity::support() : \App\Support\MailIdentity::noreply();
+
         try {
-            Mail::to($tujuan)->send(new TesEmail);
+            Mail::to($tujuan)->send(new TesEmail($tipe));
         } catch (\Throwable $e) {
             Log::warning('Tes email gagal', ['error' => $e->getMessage()]);
 
@@ -193,12 +213,12 @@ class EmailNotifier
             // — pengirim belum diverifikasi — hanya bisa dikenali dari kode
             // 550 di dalamnya, dan halaman ini cuma dilihat admin kami sendiri.
             return ['berhasil' => false, 'pesan' => str_contains($e->getMessage(), '550')
-                ? 'Server SMTP menolak pengirimnya (550). Alamat '.config('mail.from.address')
+                ? 'Server SMTP menolak pengirimnya (550). Alamat '.$sender['address']
                     .' kemungkinan belum diverifikasi sebagai sender di Brevo. Galat lengkap: '.$e->getMessage()
                 : 'Gagal mengirim: '.$e->getMessage()];
         }
 
-        return ['berhasil' => true, 'pesan' => "Email terkirim ke {$tujuan} lewat "
+        return ['berhasil' => true, 'pesan' => "Email terkirim ke {$tujuan} (tipe: {$tipe}) lewat "
             .config('mail.mailers.'.config('mail.default').'.host', config('mail.default'))
             .'. Kalau tidak sampai dalam beberapa menit, periksa folder spam dan status pengirim di Brevo.'];
     }

@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 
 class PayoutRequestedMail extends Mailable
 {
+    use \App\Mail\Concerns\PakaiIdentitasEmail;
+
     public function __construct(
         public readonly PayoutRequest $payout,
         public readonly bool $isForAdmin = true,
@@ -22,7 +24,10 @@ class PayoutRequestedMail extends Mailable
             ? 'Permintaan Pencairan Komisi Reseller: '.$this->payout->payout_number.' (Rp '.number_format($this->payout->amount, 0, ',', '.').') — '.config('app.name')
             : 'Bukti Pengajuan Pencairan Komisi: '.$this->payout->payout_number.' — '.config('app.name');
 
-        return new Envelope(subject: $subject);
+        return $this->buatEnvelope(
+            subject: $subject,
+            tipePengirim: 'noreply',
+        );
     }
 
     public function content(): Content

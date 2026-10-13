@@ -86,7 +86,7 @@ class PeringatanSistemTest extends TestCase
 
         $this->assertSame(1, Notification::where('type', 'sistem.uji')->count());
 
-        Mail::assertSentCount(1);
+        Mail::assertSentCount(count(\App\Support\MailIdentity::adminRecipients()));
     }
 
     /**
@@ -103,7 +103,7 @@ class PeringatanSistemTest extends TestCase
         $this->kabari('danger');
 
         $this->assertSame(1, Notification::where('type', 'sistem.uji')->count());
-        Mail::assertSentCount(1);
+        Mail::assertSentCount(count(\App\Support\MailIdentity::adminRecipients()));
     }
 
     /** Keadaan yang berbeda tetap dikabarkan sendiri-sendiri. */

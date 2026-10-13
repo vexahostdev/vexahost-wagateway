@@ -23,7 +23,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class KabarTim extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, \App\Mail\Concerns\PakaiIdentitasEmail;
 
     public readonly string $isi;
 
@@ -50,7 +50,10 @@ class KabarTim extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: '['.config('app.name').'] '.$this->judul);
+        return $this->buatEnvelope(
+            subject: '['.config('app.name').'] '.$this->judul,
+            tipePengirim: 'noreply',
+        );
     }
 
     public function content(): Content

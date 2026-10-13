@@ -19,13 +19,16 @@ use Illuminate\Queue\SerializesModels;
  */
 class TiketDibalas extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, \App\Mail\Concerns\PakaiIdentitasEmail;
 
     public function __construct(public readonly Ticket $ticket) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Tiket #{$this->ticket->id} sudah dibalas — {$this->ticket->subject}");
+        return $this->buatEnvelope(
+            subject: "Tiket #{$this->ticket->id} sudah dibalas — {$this->ticket->subject}",
+            tipePengirim: 'support',
+        );
     }
 
     public function content(): Content

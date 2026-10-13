@@ -157,7 +157,7 @@ return [
     | Alamat yang dipakai pelanggan saat butuh manusia — termasuk saat lupa
     | kata sandi, karena pemulihan mandiri sengaja belum dibuat.
     */
-    'support_email' => env('BILLING_SUPPORT_EMAIL', 'vexahostcloudtech@gmail.com'),
+    'support_email' => env('BILLING_SUPPORT_EMAIL', env('MAIL_SUPPORT_ADDRESS', 'support@vexahostcloud.my.id')),
 
     /*
     |--------------------------------------------------------------------------

@@ -99,7 +99,7 @@
                     Lupa kata sandi?
                 </a>
             @else
-                <a href="mailto:{{ config('billing.support_email') }}?subject=Lupa%20kata%20sandi%20VexaHost%20WA"
+                <a href="mailto:{{ \App\Support\MailIdentity::contactEmail() }}?subject=Lupa%20kata%20sandi%20VexaHost%20WA"
                    class="font-medium text-primary hover:underline">
                     Lupa kata sandi?
                 </a>
