@@ -285,6 +285,128 @@
         </table>
     </x-section>
 
+    {{-- ===================== Identitas & Pengirim Email ===================== --}}
+    <x-section judul="Identitas & Pengirim Email"
+               sub="Konfigurasi pengirim email dan alamat penerima notifikasi admin. Kosongkan kolom untuk menggunakan nilai bawaan .env."
+               class="mt-5" rapat>
+        <form method="POST" action="{{ route('admin.system.mail.update') }}" class="space-y-4 max-w-4xl">
+            @csrf
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="mail_noreply_address" class="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Alamat Pengirim Noreply
+                    </label>
+                    <input type="email" id="mail_noreply_address" name="mail_noreply_address"
+                           value="{{ old('mail_noreply_address', $identitasEmail['noreply_address']) }}"
+                           placeholder="{{ $identitasEmail['defaults']['noreply_address'] }}"
+                           class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                    <p class="mt-1 text-xs text-muted-foreground">Wajib memakai domain terverifikasi ({{ implode(', ', $identitasEmail['allowed_domains']) }}).</p>
+                    @error('mail_noreply_address')
+                        <p class="mt-1 text-xs text-destructive">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="mail_noreply_name" class="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Nama Pengirim Noreply
+                    </label>
+                    <input type="text" id="mail_noreply_name" name="mail_noreply_name"
+                           value="{{ old('mail_noreply_name', $identitasEmail['noreply_name']) }}"
+                           placeholder="{{ $identitasEmail['defaults']['noreply_name'] }}"
+                           class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                    @error('mail_noreply_name')
+                        <p class="mt-1 text-xs text-destructive">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="mail_support_address" class="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Alamat Pengirim Support
+                    </label>
+                    <input type="email" id="mail_support_address" name="mail_support_address"
+                           value="{{ old('mail_support_address', $identitasEmail['support_address']) }}"
+                           placeholder="{{ $identitasEmail['defaults']['support_address'] }}"
+                           class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                    <p class="mt-1 text-xs text-muted-foreground">Dipakai untuk tiket dan balasan. Wajib domain terverifikasi.</p>
+                    @error('mail_support_address')
+                        <p class="mt-1 text-xs text-destructive">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="mail_support_name" class="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Nama Pengirim Support
+                    </label>
+                    <input type="text" id="mail_support_name" name="mail_support_name"
+                           value="{{ old('mail_support_name', $identitasEmail['support_name']) }}"
+                           placeholder="{{ $identitasEmail['defaults']['support_name'] }}"
+                           class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                    @error('mail_support_name')
+                        <p class="mt-1 text-xs text-destructive">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label for="mail_reply_to_address" class="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Alamat Reply-To
+                    </label>
+                    <input type="email" id="mail_reply_to_address" name="mail_reply_to_address"
+                           value="{{ old('mail_reply_to_address', $identitasEmail['reply_to_address']) }}"
+                           placeholder="{{ $identitasEmail['defaults']['reply_to_address'] }}"
+                           class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                    <p class="mt-1 text-xs text-muted-foreground">Alamat tujuan saat klien membalas email (noreply maupun support).</p>
+                    @error('mail_reply_to_address')
+                        <p class="mt-1 text-xs text-destructive">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label for="mail_admin_addresses" class="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Daftar Email Admin / Tim
+                    </label>
+                    <textarea id="mail_admin_addresses" name="mail_admin_addresses" rows="3"
+                              placeholder="{{ $identitasEmail['defaults']['admin_addresses'] }}"
+                              class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary font-mono">{{ old('mail_admin_addresses', $identitasEmail['admin_addresses']) }}</textarea>
+                    <p class="mt-1 text-xs text-muted-foreground">Dipisah dengan koma atau baris baru. Alert admin dikirim ke seluruh alamat ini.</p>
+                    @error('mail_admin_addresses')
+                        <p class="mt-1 text-xs text-destructive">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90">
+                    Simpan Pengaturan Email
+                </button>
+            </div>
+        </form>
+
+        {{-- Uji Kirim Email --}}
+        <div class="mt-6 border-t border-border pt-6 max-w-4xl">
+            <h4 class="text-sm font-semibold text-foreground mb-2">Uji Kirim Email Tes</h4>
+            <p class="text-xs text-muted-foreground mb-4">Kirim email percobaan secara sinkron untuk memverifikasi sambungan SMTP Brevo dan identitas pengirim.</p>
+            <form method="POST" action="{{ route('admin.system.mail.test') }}" class="flex flex-wrap items-end gap-3">
+                @csrf
+                <div class="w-36">
+                    <label for="test_type" class="block text-xs font-medium text-muted-foreground mb-1">Identitas</label>
+                    <select id="test_type" name="type" class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                        <option value="noreply">Noreply</option>
+                        <option value="support">Support</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-48">
+                    <label for="test_email" class="block text-xs font-medium text-muted-foreground mb-1">Email Tujuan</label>
+                    <input type="email" id="test_email" name="email" required
+                           value="{{ old('email', auth()->user()?->email ?? '') }}" placeholder="nama@domain.com"
+                           class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+                </div>
+                <button type="submit" class="rounded-lg border border-border bg-muted/60 px-4 py-2 text-sm font-medium hover:bg-muted transition">
+                    Kirim Email Tes
+                </button>
+            </form>
+        </div>
+    </x-section>
+
     {{-- ===================== Lingkungan ===================== --}}
     <x-section judul="Lingkungan" class="mt-5" rapat>
         <dl class="grid gap-x-8 gap-y-2.5 text-sm sm:grid-cols-2">

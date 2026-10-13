@@ -20,14 +20,15 @@ use Illuminate\Queue\SerializesModels;
  */
 class TagihanTerbit extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, \App\Mail\Concerns\PakaiIdentitasEmail;
 
     public function __construct(public readonly Invoice $invoice) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(
+        return $this->buatEnvelope(
             subject: "Tagihan {$this->invoice->number} — ".$this->invoice->workspace?->name,
+            tipePengirim: 'noreply',
         );
     }
 

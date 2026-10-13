@@ -11,14 +11,17 @@ use Illuminate\Support\Facades\Storage;
 
 class PayoutPaidMail extends Mailable
 {
+    use \App\Mail\Concerns\PakaiIdentitasEmail;
+
     public function __construct(
         public readonly PayoutRequest $payout,
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(
-            subject: 'Pencairan Komisi Telah Ditransfer: '.$this->payout->payout_number.' — '.config('app.name')
+        return $this->buatEnvelope(
+            subject: 'Pencairan Komisi Telah Ditransfer: '.$this->payout->payout_number.' — '.config('app.name'),
+            tipePengirim: 'noreply',
         );
     }
 

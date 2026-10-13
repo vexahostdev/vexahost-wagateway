@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\HeaderKeamanan;
+use App\Models\AppSetting;
+use App\Models\AuditLog;
 use App\Models\Message;
 use App\Models\WaitlistEntry;
 use App\Models\WaSession;
@@ -13,9 +15,11 @@ use App\Services\Notifications\EmailNotifier;
 use App\Services\Notifications\WhatsAppNotifier;
 use App\Support\KapasitasPlatform;
 use App\Support\KesehatanAntrean;
+use App\Support\MailIdentity;
 use App\Support\Plan;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -57,7 +61,32 @@ class SystemController extends Controller
                 'siap' => $this->email->ready(),
                 'mailer' => config('mail.default'),
                 'host' => config('mail.mailers.smtp.host'),
-                'dari' => config('mail.from.address'),
+                'dari' => MailIdentity::noreply()['address'],
+            ],
+
+            'identitasEmail' => [
+                'noreply_address' => AppSetting::ambil('mail_noreply_address', ''),
+                'noreply_name' => AppSetting::ambil('mail_noreply_name', ''),
+                'support_address' => AppSetting::ambil('mail_support_address', ''),
+                'support_name' => AppSetting::ambil('mail_support_name', ''),
+                'reply_to_address' => AppSetting::ambil('mail_reply_to_address', ''),
+                'admin_addresses' => AppSetting::ambil('mail_admin_addresses', ''),
+                'active' => [
+                    'noreply' => MailIdentity::noreply(),
+                    'support' => MailIdentity::support(),
+                    'reply_to' => MailIdentity::replyTo(),
+                    'admin_recipients' => MailIdentity::adminRecipients(),
+                    'contact' => MailIdentity::contactEmail(),
+                ],
+                'defaults' => [
+                    'noreply_address' => config('mail.from.address'),
+                    'noreply_name' => config('mail.from.name'),
+                    'support_address' => config('mail.support.address'),
+                    'support_name' => config('mail.support.name'),
+                    'reply_to_address' => config('mail.reply_to.address'),
+                    'admin_addresses' => implode(",\n", config('mail.admin_addresses', [])),
+                ],
+                'allowed_domains' => MailIdentity::allowedSenderDomains(),
             ],
 
             'notifikasi' => [
@@ -201,5 +230,109 @@ class SystemController extends Controller
                 'uptime_seconds' => null,
             ];
         }
+    }
+
+    public function updateMail(Request $request): RedirectResponse
+    {
+        $allowedDomains = MailIdentity::allowedSenderDomains();
+        $domainList = implode(', ', $allowedDomains);
+
+        $validated = $request->validate([
+            'mail_noreply_address' => ['nullable', 'email'],
+            'mail_noreply_name' => ['nullable', 'string', 'max:100'],
+            'mail_support_address' => ['nullable', 'email'],
+            'mail_support_name' => ['nullable', 'string', 'max:100'],
+            'mail_reply_to_address' => ['nullable', 'email'],
+            'mail_admin_addresses' => ['nullable', 'string'],
+        ]);
+
+        // Validasi domain noreply
+        if (!empty($validated['mail_noreply_address'])) {
+            $host = substr(strrchr($validated['mail_noreply_address'], '@'), 1);
+            if (!in_array(strtolower($host), array_map('strtolower', $allowedDomains), true)) {
+                return back()->withErrors([
+                    'mail_noreply_address' => "Alamat pengirim harus memakai domain terverifikasi: {$domainList}",
+                ])->withInput();
+            }
+        }
+
+        // Validasi domain support
+        if (!empty($validated['mail_support_address'])) {
+            $host = substr(strrchr($validated['mail_support_address'], '@'), 1);
+            if (!in_array(strtolower($host), array_map('strtolower', $allowedDomains), true)) {
+                return back()->withErrors([
+                    'mail_support_address' => "Alamat pengirim harus memakai domain terverifikasi: {$domainList}",
+                ])->withInput();
+            }
+        }
+
+        // Validasi email admin jika diisi
+        if (!empty($validated['mail_admin_addresses'])) {
+            $rawAdmins = preg_split('/[\r\n,]+/', (string) $validated['mail_admin_addresses']);
+            $cleanedAdmins = [];
+            foreach ($rawAdmins as $item) {
+                $addr = trim($item);
+                if ($addr === '') continue;
+                if (!filter_var($addr, FILTER_VALIDATE_EMAIL)) {
+                    return back()->withErrors([
+                        'mail_admin_addresses' => "Alamat email admin tidak valid: {$addr}",
+                    ])->withInput();
+                }
+                $cleanedAdmins[] = $addr;
+            }
+            if (empty($cleanedAdmins)) {
+                return back()->withErrors([
+                    'mail_admin_addresses' => 'Minimal harus ada satu alamat email admin yang valid.',
+                ])->withInput();
+            }
+            $validated['mail_admin_addresses'] = implode(', ', array_unique($cleanedAdmins));
+        }
+
+        foreach ([
+            'mail_noreply_address',
+            'mail_noreply_name',
+            'mail_support_address',
+            'mail_support_name',
+            'mail_reply_to_address',
+            'mail_admin_addresses',
+        ] as $key) {
+            $val = $validated[$key] ?? null;
+            AppSetting::simpan($key, filled($val) ? trim($val) : null);
+        }
+
+        MailIdentity::flushCache();
+
+        AuditLog::record('settings.mail.updated', null, [
+            'noreply' => $validated['mail_noreply_address'] ?? null,
+            'support' => $validated['mail_support_address'] ?? null,
+        ]);
+
+        return back()->with('swal', [
+            'tipe' => 'success',
+            'judul' => 'Pengaturan email disimpan',
+            'pesan' => 'Identitas pengirim dan penerima admin berhasil diperbarui.',
+        ]);
+    }
+
+    public function testMail(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:180'],
+            'type' => ['required', 'in:noreply,support'],
+        ]);
+
+        $hasil = $this->email->kirimTes($data['email'], $data['type']);
+
+        AuditLog::record('settings.mail.tested', null, [
+            'tujuan' => $data['email'],
+            'tipe' => $data['type'],
+            'berhasil' => $hasil['berhasil'],
+        ]);
+
+        return back()->with('swal', [
+            'tipe' => $hasil['berhasil'] ? 'success' : 'error',
+            'judul' => $hasil['berhasil'] ? 'Email tes dikirim' : 'Email tes tidak bisa dikirim',
+            'pesan' => $hasil['pesan'],
+        ]);
     }
 }

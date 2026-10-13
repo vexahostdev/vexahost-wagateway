@@ -406,6 +406,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('pesan', AdminMessageController::class)->name('messages');
     Route::get('audit', AdminAuditController::class)->name('audit');
     Route::get('sistem', AdminSystemController::class)->name('system');
+    Route::post('sistem/mail', [AdminSystemController::class, 'updateMail'])->name('system.mail.update');
+    Route::post('sistem/mail/tes', [AdminSystemController::class, 'testMail'])->name('system.mail.test');
 
     /*
     | Insiden yang tampil di halaman status publik.

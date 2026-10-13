@@ -39,7 +39,7 @@
         </p>
         <p class="mt-1">
             Kode pemulihannya juga hilang? Hubungi kami di
-            <a href="mailto:{{ config('billing.support_email') }}" class="underline">{{ config('billing.support_email') }}</a>
+            <a href="mailto:{{ \App\Support\MailIdentity::contactEmail() }}" class="underline">{{ \App\Support\MailIdentity::contactEmail() }}</a>
             dari alamat email akun ini. Kami akan meminta bukti kepemilikan sebelum melepaskannya —
             tanpa itu, siapa pun yang mengetahui email Anda bisa melewati 2FA hanya dengan mengaku kehilangan ponsel.
         </p>

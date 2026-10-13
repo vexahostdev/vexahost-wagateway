@@ -9,6 +9,8 @@ use Illuminate\Mail\Mailables\Envelope;
 
 class ResetPasswordMail extends Mailable
 {
+    use \App\Mail\Concerns\PakaiIdentitasEmail;
+
     public function __construct(
         public readonly User $user,
         public readonly string $token,
@@ -17,7 +19,10 @@ class ResetPasswordMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Atur ulang kata sandi — '.config('app.name'));
+        return $this->buatEnvelope(
+            subject: 'Atur ulang kata sandi — '.config('app.name'),
+            tipePengirim: 'noreply',
+        );
     }
 
     public function content(): Content

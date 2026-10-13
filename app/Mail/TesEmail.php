@@ -17,16 +17,25 @@ use Illuminate\Mail\Mailables\Envelope;
  */
 class TesEmail extends Mailable
 {
+    use \App\Mail\Concerns\PakaiIdentitasEmail;
+
+    public function __construct(public readonly string $tipePengirim = 'noreply') {}
+
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Tes email keluar — VexaHost WA Gateway');
+        return $this->buatEnvelope(
+            subject: 'Tes email keluar — ' . config('app.name', 'VexaHost WA Gateway'),
+            tipePengirim: $this->tipePengirim,
+        );
     }
 
     public function content(): Content
     {
+        $sender = $this->tipePengirim === 'support' ? \App\Support\MailIdentity::support() : \App\Support\MailIdentity::noreply();
+
         return new Content(markdown: 'emails.tes', with: [
             'dikirimPada' => now()->translatedFormat('j F Y, H:i'),
-            'pengirim' => config('mail.from.address'),
+            'pengirim' => $sender['address'],
             'mailer' => config('mail.default'),
         ]);
     }

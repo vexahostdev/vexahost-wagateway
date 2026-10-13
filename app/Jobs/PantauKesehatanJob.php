@@ -145,23 +145,37 @@ class PantauKesehatanJob implements ShouldQueue
     private function emailKeluar(PeringatanSistem $peringatan): void
     {
         $mailer = config('mail.default');
+        $noreply = \App\Support\MailIdentity::noreply();
+        $support = \App\Support\MailIdentity::support();
+
         $siap = ! in_array($mailer, ['log', 'array', 'null'], true)
             && ! ($mailer === 'smtp' && blank(config('mail.mailers.smtp.host')))
-            && filled(config('mail.from.address'));
+            && filled($noreply['address']);
 
-        if ($siap) {
+        if (! $siap) {
+            $peringatan->kabari(
+                type: 'sistem.email_mati',
+                title: 'Email keluar belum berjalan',
+                body: "MAIL_MAILER sekarang '{$mailer}'. Tidak ada satu pun email yang benar-benar "
+                    .'terkirim — pemulihan kata sandi dan pemberitahuan tiket cuma janji.',
+                url: route('admin.system'),
+                level: 'warning',
+                dedupe: 'sistem.email_mati',
+            );
+
             return;
         }
 
-        $peringatan->kabari(
-            type: 'sistem.email_mati',
-            title: 'Email keluar belum berjalan',
-            body: "MAIL_MAILER sekarang '{$mailer}'. Tidak ada satu pun email yang benar-benar "
-                .'terkirim — pemulihan kata sandi dan pemberitahuan tiket cuma janji.',
-            url: route('admin.system'),
-            level: 'warning',
-            dedupe: 'sistem.email_mati',
-        );
+        if (! \App\Support\MailIdentity::isDomainAllowed($noreply['address']) || ! \App\Support\MailIdentity::isDomainAllowed($support['address'])) {
+            $peringatan->kabari(
+                type: 'sistem.email_domain_tidak_sah',
+                title: 'Domain email pengirim belum terverifikasi',
+                body: "Domain pengirim ({$noreply['address']} / {$support['address']}) tidak ada dalam daftar domain yang diizinkan Brevo. Email kemungkinan besar akan ditolak (550).",
+                url: route('admin.system'),
+                level: 'danger',
+                dedupe: 'sistem.email_domain_tidak_sah',
+            );
+        }
     }
 
     /** Saldo yang tidak bisa direkonsiliasi adalah uang pelanggan yang hilang jejaknya. */

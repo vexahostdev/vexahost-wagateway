@@ -451,7 +451,7 @@ class MitraTest extends TestCase
         $this->assertNotNull($createdPayout->payout_number);
         $this->assertStringStartsWith('PO-', $createdPayout->payout_number);
 
-        Mail::assertSent(PayoutRequestedMail::class, 2);
+        Mail::assertSent(PayoutRequestedMail::class, 1 + count(\App\Support\MailIdentity::adminRecipients()));
     }
 
     public function test_admin_bisa_menandai_pencairan_komisi_selesai_dan_komisi_menjadi_paid(): void
