@@ -67,7 +67,7 @@ class ExemptionController extends Controller
             'emailSiap' => $email->ready(),
             'emailPengirim' => config('mail.from.address'),
             'emailMailer' => config('mail.default'),
-            'emailAdmin' => config('billing.support_email'),
+            'emailAdmin' => implode(', ', \App\Support\MailIdentity::adminRecipients()),
 
             // Untuk menjelaskan akibatnya secara konkret, bukan abstrak.
             'sesiIstimewaHidup' => WaSession::whereIn('phone_number', SpecialNumber::daftar())

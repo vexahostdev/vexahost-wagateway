@@ -46,8 +46,10 @@ class PengecualianEmailTest extends TestCase
             'mail.default' => 'smtp',
             'mail.mailers.smtp.host' => 'smtp-relay.brevo.com',
             'mail.from.address' => 'vexahostcloudtech@gmail.com',
+            'mail.admin_addresses' => ['tim@vexahostcloud.my.id'],
             'billing.support_email' => 'tim@vexahostcloud.my.id',
         ]);
+        \App\Support\MailIdentity::flushCache();
 
         $this->admin = User::create([
             'name' => 'VexaHost Finance',

@@ -200,4 +200,13 @@ class MailIdentityTest extends TestCase
         $this->assertContains('admin1@contoh.id', MailIdentity::adminRecipients());
         $this->assertContains('admin2@contoh.id', MailIdentity::adminRecipients());
     }
+
+    public function test_admin_recipients_override_replaces_all_config_addresses(): void
+    {
+        AppSetting::simpan('mail_admin_addresses', 'singleadmin@vexahostcloud.my.id');
+        MailIdentity::flushCache();
+
+        $recipients = MailIdentity::adminRecipients();
+        $this->assertSame(['singleadmin@vexahostcloud.my.id'], $recipients);
+    }
 }
