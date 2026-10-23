@@ -21,8 +21,11 @@ interface WhatsAppProvider
 {
     /**
      * Menyalakan sesi dan memicu registrasi QR atau koneksi ulang.
+     *
+     * `$hanyaPulihkan` untuk jalur tanpa manusia: sesi yang tidak punya
+     * kredensial untuk dipulihkan tidak dijalankan sama sekali.
      */
-    public function startSession(WaSession $session): void;
+    public function startSession(WaSession $session, bool $hanyaPulihkan = false): void;
 
     public function stopSession(WaSession $session): void;
 

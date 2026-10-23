@@ -86,6 +86,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/text \
     "status": "queued",
     "error": null,
     "created_at": "2026-08-13T14:03:11+07:00",
+    "scheduled_at": null,
     "sent_at": null,
     "delivered_at": null,
     "read_at": null
@@ -93,11 +94,15 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/text \
 }
 ```
 
+`scheduled_at` terisi kalau nomor pengirim masih dalam masa pemanasan dan jatah hari itu sudah terpakai: pesannya diterima, kuotanya tercatat, dan ia dikirim otomatis pada waktu tersebut. Lihat [Praktik Baik](PRAKTIK_BAIK.md).
+
 Galat `422` yang mungkin muncul:
 
 - `Nomor tujuan tidak valid: 123`
 - `Kuota pesan bulan ini sudah habis (1000 pesan).`
 - `Tidak ada sesi WhatsApp yang bisa dipakai. Hubungkan satu sesi terlebih dahulu.`
+- `Penerima 62… sudah meminta berhenti menerima pesan dari workspace ini (membalas "STOP" …)` — tidak memotong kuota
+- `Pengiriman ke 62… ditahan sementara: lebih dari 40 pesan dalam 10 menit ke chat yang sama …` — tidak memotong kuota
 
 ## Kirim lampiran
 
@@ -136,6 +141,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/media \
   "data": {
     "batch_id": "01K2CDEFGH7JKMNPQRSTVWXYZ",
     "queued": 2,
+    "scheduled": 0,
     "rejected": [
       { "to": "bukan-nomor", "reason": "Nomor tujuan tidak valid: bukan-nomor" }
     ],
@@ -144,7 +150,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/media \
 }
 ```
 
-Nomor rusak masuk `rejected` tanpa membatalkan sisanya. Nomor ganda dibuang otomatis.
+Nomor rusak masuk `rejected` tanpa membatalkan sisanya. Nomor ganda dibuang otomatis. `scheduled` adalah bagian dari `queued` yang dijadwalkan ke hari berikutnya karena masa pemanasan nomor pengirim.
 
 ## Kirim dari template
 

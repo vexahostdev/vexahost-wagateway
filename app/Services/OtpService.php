@@ -56,6 +56,9 @@ class OtpService
         $pengirim = $workspace->name;
 
         $this->dispatcher->queue($this->senderSession($workspace), $normalized, [
+            // OTP yang ditunda sampai besok sama dengan OTP yang gagal, dan
+            // orang yang memintanya baru saja menekan tombol — ia menunggu.
+            'is_otp' => true,
             'type' => 'text',
             'body' => "*{$code}* adalah kode verifikasi {$pengirim} Anda.\n\n"
                 ."Kode berlaku {$minutes} menit. Jangan bagikan kode ini kepada siapa pun, "

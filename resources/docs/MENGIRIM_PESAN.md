@@ -82,13 +82,16 @@ Balasannya:
   "data": {
     "batch_id": "01K2CDEFGH7JKMNPQRSTVWXYZ",
     "queued": 3,
+    "scheduled": 0,
     "rejected": [],
     "message_ids": ["01K2C…", "01K2C…", "01K2C…"]
   }
 }
 ```
 
-Nomor yang formatnya rusak masuk ke `rejected` **tanpa membatalkan sisanya**. Nomor ganda dibuang otomatis.
+Nomor yang formatnya rusak, atau yang penerimanya sudah membalas STOP, masuk ke `rejected` **tanpa membatalkan sisanya** dan tanpa memotong kuota. Nomor ganda dibuang otomatis.
+
+`scheduled` adalah bagian dari `queued` yang dijadwalkan ke hari berikutnya karena nomor pengirim masih dalam [masa pemanasan](PRAKTIK_BAIK.md). Pesan-pesan itu pasti terkirim, hanya tidak hari ini.
 
 Maksimal 1000 nomor per permintaan.
 
@@ -116,7 +119,7 @@ curl -H "X-Api-Key: $KEY" \
 
 | Status | Arti |
 |---|---|
-| `queued` | Menunggu giliran di antrean |
+| `queued` | Menunggu giliran di antrean. Kalau `scheduled_at` terisi, pesannya dijadwalkan pada waktu itu |
 | `sending` | Sedang dikirim |
 | `sent` | Sampai ke server WhatsApp (satu centang) |
 | `delivered` | Sampai ke HP tujuan (dua centang) |
@@ -137,6 +140,10 @@ Penyebab tersering:
 | Sesi terputus dan tidak pulih | Cek halaman Sesi WhatsApp |
 | Format nomor tidak valid | Periksa formatnya |
 | Kuota bulanan habis | Lihat [Batas & Kuota](BATAS_DAN_KUOTA.md) |
+| Penerima sudah membalas STOP | Hormati permintaannya. Kalau ia sendiri meminta dikirimi lagi, hapus nomornya di menu **Berhenti Berlangganan** |
+| Lebih dari 40 pesan ke chat yang sama dalam 10 menit | Hampir selalu dua sistem yang saling membalas otomatis — periksa balasan otomatis di integrasi Anda. Pengiriman ke chat itu dibuka lagi setelah 10 menit |
+
+Dua penolakan terakhir terjadi **sebelum** pesannya dicatat, jadi tidak memotong kuota. Penjelasannya ada di [Praktik Baik](PRAKTIK_BAIK.md).
 
 Pesan yang gagal karena sesi terputus **dicoba ulang otomatis** sampai empat kali dengan jeda menaik. Baru setelah itu ditandai gagal.
 

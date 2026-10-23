@@ -41,20 +41,28 @@ Pelanggan yang baru saja memesan di toko Anda tidak akan melaporkan konfirmasi p
 | Pesan identik ke ratusan nomor sekaligus | Pola yang mudah dikenali sebagai robot |
 | Nomor baru langsung dipakai broadcast besar | Paling cepat kena |
 
-## Nomor baru: mulai pelan
+## Nomor baru: masa pemanasan otomatis
 
-Nomor yang baru tertaut belum punya rekam jejak. Mengirim 500 pesan di hari pertama adalah cara tercepat kehilangan nomor tersebut.
+Nomor yang baru tertaut belum punya rekam jejak. Mengirim 500 pesan di hari pertama adalah cara tercepat kehilangan nomor tersebut — karena itu, selama 30 hari pertama sebuah nomor di gateway ini, jumlah pesan per hari dibatasi **otomatis**:
 
-Panduan kasar untuk nomor baru:
-
-| Hari | Batas wajar |
+| Hari ke- | Batas per hari |
 |---|---|
-| 1–3 | Di bawah 50 pesan/hari |
-| 4–7 | Sampai 150 pesan/hari |
-| Minggu 2 | Sampai 300 pesan/hari |
-| Setelah sebulan | Naikkan bertahap sambil memantau |
+| 1–3 | 50 pesan |
+| 4–7 | 150 pesan |
+| 8–14 | 300 pesan |
+| 15–30 | 1.000 pesan |
+| Sesudahnya | Tanpa batas harian |
 
-Naikkan pelan-pelan, dan **berhenti menaikkan** kalau mulai muncul kegagalan pengiriman yang tidak wajar.
+**Tidak ada pesan yang hilang.** Pesan yang melewati batas hari itu dijadwalkan ke pukul 08.00 hari berikutnya dan dikirim otomatis. Di dashboard ia tertulis "dikirim [tanggal, jam]", dan di API kolom `scheduled_at` terisi.
+
+**Yang tidak pernah ditunda**, berapa pun yang sudah terkirim hari itu:
+
+- **Kode OTP** — penerimanya sedang menunggu.
+- **Balasan ke orang yang mengirim pesan ke Anda dalam 24 jam terakhir** — mereka yang memulai percakapan.
+
+**Nomor Anda sudah lama aktif di ponsel?** Halaman **Sesi WhatsApp** menampilkan hari pemanasan dan jatah hari ini di samping nomornya, beserta tombol **Lewati pemanasan**. Menekannya menghapus batas harian untuk nomor itu, dan pesan yang sudah terjadwal langsung dikirim. Lewati hanya kalau nomornya memang sudah lama dipakai berkirim pesan secara normal — nomor baru yang langsung mengirim ratusan pesan ke orang yang belum mengenalnya adalah penyebab tersering nomor diblokir.
+
+Menautkan ulang nomor yang sama — menghapus lalu membuat sesi baru, atau memindahkannya ke workspace lain — **tidak** mengulang masa pemanasan dari awal.
 
 ## Jeda kirim itu perlindungan, bukan hambatan
 
@@ -84,7 +92,17 @@ Halo Budi, pesanan #1234 sudah kami kirim…
 Balas STOP untuk berhenti menerima info promo.
 ```
 
-Lalu benar-benar hormati permintaannya. Orang yang bisa berhenti dengan mudah tidak perlu menekan tombol laporkan.
+Kami menghormatinya **otomatis**. Penerima yang membalas STOP, BERHENTI, UNSUBSCRIBE, UNSUB, atau STOP PROMO — sebagai seluruh isi pesannya — masuk ke daftar **Berhenti Berlangganan** workspace Anda, dan pesan berikutnya ke nomor itu ditolak tanpa memotong kuota. Orang yang bisa berhenti dengan mudah tidak perlu menekan tombol laporkan.
+
+Yang tetap terkirim ke mereka: kode OTP, dan balasan setelah mereka menghubungi Anda lagi. Penerima yang membalas MULAI, START, atau LANJUT keluar dari daftar itu sendiri. Kalau penerima meminta dikirimi lagi lewat jalur lain, hapus nomornya dari menu **Berhenti Berlangganan**.
+
+## Balasan otomatis yang saling membalas
+
+Integrasi yang membalas otomatis — chatbot, AI agent, auto-reply — bisa bertemu sistem lain yang juga membalas otomatis, lalu keduanya saling membalas tanpa henti. Ratusan pesan ke satu chat dalam beberapa menit adalah pola yang sangat cepat membuat nomor dibatasi.
+
+Karena itu, **lebih dari 40 pesan ke chat yang sama dalam 10 menit** ditahan: pesan berikutnya ke chat itu ditolak sampai 10 menit berlalu, tanpa memotong kuota, dan Anda mendapat kabar di lonceng dashboard. Percakapan dengan manusia — termasuk AI agent yang membalas beberapa gelembung sekaligus — tidak pernah mendekati angka itu.
+
+Kalau integrasi Anda membalas otomatis, lewati juga pesan masuk yang `is_backlog`-nya `true` — lihat [Webhook](WEBHOOK.md).
 
 **Jangan kirim kata sandi, kode OTP milik layanan lain, atau data kartu.** Riwayat WhatsApp tersinkron ke semua perangkat tertaut, tercadangkan ke cloud, dan sering terlihat di notifikasi layar kunci.
 
@@ -97,6 +115,8 @@ Lalu benar-benar hormati permintaannya. Orang yang bisa berhenti dengan mudah ti
 **Balas pesan yang masuk.** Nomor yang hanya mengirim tanpa pernah menerima terlihat seperti mesin. Percakapan dua arah membangun rekam jejak yang baik. Manfaatkan [webhook](WEBHOOK.md) agar balasan pelanggan sampai ke tim Anda.
 
 **Pantau angka kegagalan.** Lonjakan mendadak di kartu "Gagal bulan ini" biasanya tanda pertama ada yang tidak beres — jauh sebelum nomor benar-benar diblokir.
+
+**Perhatikan peringatan "banyak pesan tidak sampai".** Nomor yang sedang dibatasi WhatsApp biasanya tetap tersambung, tapi pesannya berhenti di satu centang. Kami memeriksanya tiap jam: kalau setengah atau lebih dari pesan Anda (dari minimal 100 pesan) belum sampai ke ponsel penerima setelah 2 jam, Anda dikabari lewat lonceng dashboard dan WhatsApp. Kabar ini tidak menghentikan pengiriman apa pun — saat itulah waktu terbaik mengurangi kiriman ke orang yang belum pernah menghubungi Anda, sebelum nomornya diblokir.
 
 ## Kalau nomor terlanjur diblokir
 

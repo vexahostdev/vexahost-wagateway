@@ -1,11 +1,16 @@
 import express from 'express';
 import process from 'node:process';
+import { tungguPenulisanSelesai } from './auth-state.js';
 import { config } from './config.js';
+import { KunciData } from './kunci-data.js';
 import { logger } from './logger.js';
 import { SessionManager } from './session-manager.js';
+import { VersiWhatsApp } from './versi-wa.js';
 
 const app = express();
-const manager = new SessionManager();
+const versi = new VersiWhatsApp();
+const manager = new SessionManager({ versi });
+const kunci = new KunciData({ folder: config.dataPath });
 
 // Lampiran dikirim sebagai base64 di dalam JSON, jadi batas body harus lebih
 // besar dari batas lampiran WhatsApp (±16 MB) ditambah overhead base64.
@@ -50,9 +55,11 @@ app.get('/health', (req, res) => {
 
 app.post('/sessions/:id/start', async (req, res) => {
     try {
-        await manager.start(req.params.id, req.body ?? {});
+        const entry = await manager.start(req.params.id, req.body ?? {});
 
-        res.json({ status: 'starting' });
+        // `null` = permintaan hanya-pulihkan untuk sesi tanpa kredensial.
+        // Laravel sudah dikabari lewat event `disconnected`.
+        res.json({ status: entry ? 'starting' : 'credentials_missing' });
     } catch (error) {
         logger.error({ sessionId: req.params.id, err: error.message }, 'Gagal menjalankan sesi');
 
@@ -109,21 +116,20 @@ app.post('/sessions/:id/messages', async (req, res) => {
     }
 });
 
-const server = app.listen(config.port, config.host, async () => {
-    logger.info({ port: config.port, dataPath: config.dataPath }, 'Engine WhatsApp berjalan (Baileys)');
-
-    await manager.bootstrap();
-});
+let server = null;
 
 /**
  * Coolify mengirim SIGTERM saat redeploy.
  *
- * Kredensial disimpan dulu ke store, baru koneksi socket ditutup.
+ * Kredensial disimpan dulu ke store, baru koneksi socket ditutup, lalu seluruh
+ * penulisan berkas ditunggu sebelum kunci data dilepas — engine pengganti
+ * yang sedang menunggu kunci itu tidak boleh mulai membaca berkas yang masih
+ * ditulis engine ini.
  */
 async function shutdown(signal) {
     logger.info({ signal }, 'Mematikan engine');
 
-    server.close();
+    server?.close();
 
     const ids = manager.listSessionIds();
 
@@ -144,6 +150,14 @@ async function shutdown(signal) {
         }),
     );
 
+    await tungguPenulisanSelesai(1500);
+
+    try {
+        await kunci.lepas();
+    } catch (error) {
+        logger.warn({ err: error.message }, 'Gagal melepas kunci data sesi');
+    }
+
     process.exit(0);
 }
 
@@ -152,4 +166,19 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 process.on('unhandledRejection', (reason) => {
     logger.error({ err: String(reason) }, 'Promise tidak tertangani');
+});
+
+// Port baru dibuka SETELAH kunci didapat. Selama menunggu, Laravel menerima
+// "connection refused" — dan itu memang yang diinginkan: permintaan `start`
+// yang dilayani sebelum engine lama melepas folder sesi adalah persis dua
+// pemegang untuk satu kredensial.
+await kunci.ambil();
+await versi.segarkan();
+
+setInterval(() => versi.segarkan(), 60 * 60 * 1000).unref();
+
+server = app.listen(config.port, config.host, async () => {
+    logger.info({ port: config.port, dataPath: config.dataPath }, 'Engine WhatsApp berjalan (Baileys)');
+
+    await manager.bootstrap();
 });
