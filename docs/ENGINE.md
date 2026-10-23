@@ -15,7 +15,7 @@ Engine **TIDAK** lagi menjalankan browser Chromium atau Puppeteer.
 Konsekuensi arsitektur ini:
 
 - **Satu sesi = satu koneksi WebSocket murni.** Tanpa overhead peramban (Chromium/Puppeteer). Biaya RAM per sesi Baileys di server produksi: **BELUM DIUKUR SAMA SEKALI**.
-- **Kapasitas platform.** Batas aman sesi Baileys belum diketahui sebelum pengukuran produksi selesai dilakukan. Batas konfigurasi `WA_MAX_SESSIONS` dipertahankan pada nilai operasional saat ini (`3`).
+- **Kapasitas platform.** Produksi berjalan dengan `WA_MAX_SESSIONS=20` sejak migrasi Baileys (dikonfirmasi aman 23 Okt 2026). Biaya RAM per sesi belum diukur resmi; `/health` melaporkan `rss_mb` engine untuk memantaunya saat sesi tersambung bertambah.
 - **Koneksi instan.** Opsi `syncFullHistory: false` disetel secara eksplisit sehingga engine tidak menarik riwayat chat besar saat baru terhubung, menghindari lonjakan memori dan waktu tunggu yang lama.
 - **Kredensial berbasis multi-file auth.** Kunci enkripsi sesi disimpan sebagai berkas-berkas JSON (`creds.json`, `app-state-sync-key-*.json`, `pre-key-*.json`, dll.) di folder sesi.
 
@@ -47,6 +47,10 @@ Baileys secara internal menggunakan format JID `@s.whatsapp.net` untuk direct ch
 engine/src/
 ├─ server.js            Express, penjaga token, endpoint HTTP & metrik kesehatan
 ├─ session-manager.js   Inti: Map sesi, siklus socket Baileys, normalisasi event & kontrak
+├─ auth-state.js        Auth state berbasis berkas: tulis atomik, kunci per berkas, penilaian creds.json
+├─ kunci-data.js        Hak tunggal atas folder data sesi (.engine.lock) saat deploy bertumpuk
+├─ versi-wa.js          Versi WhatsApp Web: diambil dari web.whatsapp.com, disegarkan berkala
+├─ arsip-kirim.js       Isi pesan yang baru dikirim, untuk menjawab permintaan kirim ulang
 ├─ queue.js             Antrean per sesi + jeda anti-ban (3–8 detik)
 ├─ laravel.js           Klien HTTP bertanda tangan HMAC ke Laravel (/internal/*)
 ├─ config.js            Pembacaan env + validasi saat boot
@@ -55,13 +59,22 @@ engine/src/
    └─ laravel-store.js  Sinkronisasi backup kredensial multi-file auth ke Laravel
 ```
 
+### `auth-state.js`
+Pengganti `useMultiFileAuthState` bawaan Baileys, yang menimpa berkas langsung (berkas terpotong kalau proses mati di tengah penulisan) dan menjawab `null` untuk galat apa pun (Baileys lalu diam-diam membuat identitas baru — nomor "tiba-tiba minta scan ulang"). Di sini setiap penulisan lewat berkas sementara lalu `rename`, `creds.json` dinilai `tertaut` / `belum_tertaut` / `rusak` / `tidak_ada`, dan kunci per berkasnya dipakai bersama oleh `LaravelStore` saat mencadangkan.
+
+### `kunci-data.js`
+Coolify menyalakan container baru sebelum menghentikan yang lama, dan keduanya memasang volume `/data` yang sama. Engine mengambil `.engine.lock` sebelum membuka port; engine kedua menunggu sampai yang pertama melepasnya (saat SIGTERM), sampai detaknya berhenti 30 detik, atau — di container yang sama — sampai prosesnya terbukti mati.
+
+### `versi-wa.js`
+Versi WhatsApp Web diambil saat boot dan disegarkan berkala (paling cepat tiap 6 jam), serta dipaksa disegarkan saat WhatsApp menolak dengan kode 405. Gagal mengambil tidak menghentikan apa pun. `WA_WEB_VERSION` yang diisi mematok versinya.
+
 ### `config.js`
 Membaca environment dan memvalidasi variabel wajib saat booting:
 - `ENGINE_TOKEN`: Token statis untuk menjaga endpoint HTTP engine.
 - `ENGINE_HMAC_SECRET`: Kunci rahasia untuk menandatangani panggilan callback ke Laravel.
 - `LARAVEL_URL`: URL internal aplikasi Laravel.
 - `dataPath`: Direktori lokal penyimpanan kredensial (bawaan: `/data/sessions`).
-- `maxSessions`: Batas maksimal sesi aktif (`WA_MAX_SESSIONS`, bawaan 20).
+- `maxSessions`: Batas maksimal sesi aktif (`WA_MAX_SESSIONS`; bawaan kode 3 kalau env kosong, produksi 20).
 - `initTimeoutMs`: Batas waktu inisialisasi koneksi (bawaan 180.000 ms).
 
 ### `logger.js`
@@ -80,7 +93,7 @@ Express HTTP server (port 3100) dengan rute:
 | Method | Path | Keterangan |
 |---|---|---|
 | GET | `/health` | Status engine, metrik sesi websocket, memori RSS/heap, dan kompatibilitas pemantau |
-| POST | `/sessions/:id/start` | Menyalakan sesi Baileys |
+| POST | `/sessions/:id/start` | Menyalakan sesi Baileys. `restore_only: true` (penjadwal) hanya memulihkan; tanpa kredensial dijawab `credentials_missing` |
 | POST | `/sessions/:id/stop` | Menghentikan socket sesi |
 | POST | `/sessions/:id/logout` | Memutus tautan di WhatsApp dan menghapus backup |
 | GET | `/sessions/:id/status` | Status sesi (`connecting`, `qr`, `connected`, `disconnected`) |
@@ -99,26 +112,36 @@ Komponen inti yang mengelola seluruh instans socket Baileys.
 
 ### Siklus Koneksi & Pemetaan Event
 
-1. **`start(sessionId)`**:
+1. **`start(sessionId, { backup_data, fromBootstrap, restore_only })`**:
    - Memastikan tidak melebihi `WA_MAX_SESSIONS`.
-   - Menyiapkan folder sesi di `/data/sessions/{sessionId}`. Jika belum ada kredensial lokal, memeriksa dan memulihkan cadangan dari Laravel via `LaravelStore.extract()`.
-   - Menginisialisasi auth state melalui `useMultiFileAuthState(sessionDir)`.
-   - Membuka socket dengan `makeWASocket()`.
-   - Memasang pengukur batas waktu inisialisasi (`pengukurInit`).
-2. **`connection.update`**:
+   - Menilai `creds.json` di `/data/.../{sessionId}`. Yang `tertaut` selalu dipakai — lebih baru dari cadangan mana pun.
+   - Kalau tidak tertaut: memulihkan dari `backup_data` (dikirim Laravel), atau saat boot dari `LaravelStore`. Cadangan yang `creds.json`-nya tidak layak diabaikan. `creds.json` yang rusak dipindah ke `{folder}.rusak`, tidak ditimpa diam-diam.
+   - **Jalur otomatis hanya boleh memulihkan.** `fromBootstrap` dan `restore_only` (penjadwal Laravel) tanpa kredensial yang bisa dipulihkan TIDAK menjalankan sesi — mengirim event `disconnected` alasan `credentials_missing` dan menjawab `{ status: 'credentials_missing' }`. Tanpa ini sesi tanpa kredensial memunculkan QR yang tidak ditatap siapa pun.
+   - Laravel yang tidak terjangkau saat boot dilempar sebagai galat, BUKAN dilaporkan sebagai kredensial hilang.
+   - Auth state dibuat sekali per sesi (`pakaiAuthStateBerkas`) dan dipakai bersama oleh setiap socket sambung ulang.
+2. **`connection.update`** (diabaikan kalau datang dari socket yang sudah diganti):
    - Jika menerima `qr`: Mengonversi string QR menjadi format Data URL PNG via `qrcode.toDataURL()`, melepas pengukur inisialisasi, dan mengirim event `qr` ke Laravel.
-   - Jika `connection === 'open'`: Mengambil data nomor telepon dan push name, status berubah menjadi `connected`, memasang sinkronisasi backup berkala, dan mengirim event `ready` ke Laravel.
-   - Jika `connection === 'close'`:
-     - Kode `401` (`DisconnectReason.loggedOut`): Sesi dikeluarkan oleh WhatsApp. Status menjadi `disconnected`, memicu event `disconnected` dengan alasan `logged_out`, dan menghentikan sesi.
-     - Kode `515` (`DisconnectReason.restartRequired`): WhatsApp meminta restart koneksi. Engine langsung melakukan penyambungan ulang segera (delay 0 ms).
-     - Error koneksi sementara (timeout, connection lost): Mencoba menyambung kembali dengan *exponential backoff* (2s, 3s, 4.5s... maks 15s) hingga 5 kali percobaan. Jika batas habis, status menjadi `disconnected` dan sesi dihentikan.
+   - Jika `connection === 'open'`: status `connected`, event `ready`, sinkronisasi backup berkala. Penghitung sambung ulang baru kembali nol setelah koneksi **bertahan 60 detik** — koneksi yang terbuka lalu langsung putus tidak mendapat jatah percobaan baru.
+   - Jika `connection === 'close'`, tindakannya ditentukan `golonganPutus(statusCode)`:
+
+     | Kode | Golongan | Tindakan | Event ke Laravel |
+     |---|---|---|---|
+     | 401 | `logged_out` | Berhenti, **buang kredensial lokal** | `disconnected` / `logged_out` |
+     | 403 | `banned` | Berhenti, kredensial disimpan | `disconnected` / `banned` |
+     | 440 | `replaced` | Berhenti, **tidak** merebut balik | `disconnected` / `replaced` |
+     | 515 | `restart` | Sambung ulang seketika | — |
+     | 405 | `version` | Segarkan versi WhatsApp Web, lalu seperti sementara | — |
+     | lainnya, termasuk 500 | `transient` | Backoff (2s, 3s, 4.5s… maks 15s), 5 kali | `disconnected` / `connection_lost` kalau habis |
+
+     Kode 500 (`badSession`) adalah bawaan Baileys untuk galat stream apa pun yang tidak dikenalinya — bukan bukti kredensial rusak, jadi tidak pernah dijadikan alasan membuang kredensial.
 3. **`creds.update`**:
-   - Menyimpan pembaruan kunci enkripsi ke disk lokal via `saveCreds()`.
+   - Menyimpan kredensial ke disk lewat penulisan atomik. Diabaikan untuk sesi yang sudah dihentikan, supaya tidak menulis ke folder yang mungkin sudah dipakai tautan baru.
 4. **`messages.upsert`**:
-   - Mengabaikan pesan keluar sendiri (`key.fromMe`) dan broadcast status WhatsApp.
+   - Mengabaikan pesan keluar sendiri (`key.fromMe`), status, siaran, dan Channel (`@newsletter`).
    - Membuka pembungkus pesan ephemeral atau view-once.
-   - Menormalkan JID tujuan dan pengirim ke format kontrak eksternal (`toContractChatId`), mengubah `@s.whatsapp.net` menjadi `@c.us`.
-   - Mengirim event `message` ke Laravel.
+   - Chat beralamat `@lid` dipetakan ke nomor teleponnya (`remoteJidAlt`/`participantAlt`, lalu `lidMapping`), supaya `from` tidak kosong dan `chat_id` bisa dibalas.
+   - Menormalkan JID ke format kontrak (`@s.whatsapp.net` → `@c.us`).
+   - Mengirim event `message` ke Laravel, ditambah `timestamp` (waktu asli, detik Unix) dan `is_backlog` (`true` untuk pesan yang menumpuk selama offline — tipe upsert `append`).
 5. **`messages.update`**:
    - Memetakan pembaruan status pengiriman (`WAMessageStatus`):
      - `SERVER_ACK` (2) → ack `1` (sent)
@@ -128,7 +151,8 @@ Komponen inti yang mengelola seluruh instans socket Baileys.
 
 ### Pengiriman Pesan (`send`)
 
-- Memverifikasi keberadaan nomor tujuan di WhatsApp via `sock.onWhatsApp(digits)`. Jika nomor tidak terdaftar, melempar error dengan tanda `permanent = true` (menghasilkan status HTTP 422).
+- Memverifikasi keberadaan nomor tujuan di WhatsApp via `sock.onWhatsApp(digits)`, dengan hasil disimpan 24 jam (nomor tidak terdaftar: 1 jam) supaya broadcast ulang tidak mengulang ratusan pemeriksaan. Jika nomor tidak terdaftar, melempar error dengan tanda `permanent = true` (menghasilkan status HTTP 422).
+- Isi pesan yang terkirim disimpan 24 jam di `ArsipKirim` untuk `getMessage` — permintaan kirim ulang dari ponsel penerima yang gagal mendekripsi. Cache bawaan Baileys hanya 5 menit dan hilang tiap sambung ulang.
 - Mendukung pesan teks dan media (`image`, `video`, `audio`, `document`) dari buffer base64.
 - Mengembalikan ID WhatsApp buram dan `chat_id` yang dinormalkan ke `@c.us` atau `@g.us`:
   ```json
@@ -151,10 +175,13 @@ Mengantre pesan keluar per nomor WhatsApp menggunakan antrean Promise terisolasi
 
 Menyimpan cadangan kredensial multi-file auth Baileys ke storage Laravel (`session-backups` disk).
 
-- `save({ session: sessionId })`: Membaca seluruh berkas JSON kredensial pada folder sesi, membundelnya ke dalam satu struktur dokumen JSON `{ version: 1, sessionId, files: { [nama]: konten } }`, menghitung digest SHA-256, dan mengunggahnya ke `/internal/sessions/{sessionId}/backup`.
-- `extract({ session: sessionId })`: Mengunduh dokumen JSON cadangan dari Laravel dan merekonstruksi seluruh berkas auth ke folder `/data/sessions/{sessionId}`.
-- `delete({ session: sessionId })`: Menghapus cadangan di Laravel dan membersihkan folder lokal.
-- `sessionExists({ session: sessionId })`: Memeriksa keberadaan berkas kredensial di lokal atau memverifikasi ke Laravel.
+- `save({ session: sessionId })`: Membaca seluruh berkas JSON kredensial pada folder sesi **di bawah kunci yang sama dengan penulisnya** (berkas `.tmp` dilewati), membundelnya ke dalam `{ version: 1, sessionId, files: { [nama]: konten } }`, menghitung digest SHA-256, dan mengunggahnya ke `/internal/engine/session-backup/{sessionId}`. Dibatalkan kalau `creds.json` rusak atau belum tertaut — cadangan sehat yang lama tidak boleh terdorong keluar oleh cadangan rusak.
+- `ambilBerkas({ session: sessionId })`: Mengunduh cadangan dan mengembalikan isinya tanpa menulis apa pun — pemanggil yang menilai layak tidaknya.
+- `extract({ session: sessionId })`: Mengganti isi folder sesi dengan cadangan. Nama berkas yang keluar dari folder sesi ditolak.
+- `delete({ session: sessionId })`: Menghapus cadangan di Laravel. Folder lokal **tidak** ikut dihapus di sini: pemanggilnya (`logout()`) berjalan di latar belakang dan bisa mengenai folder tautan baru.
+- `sessionExists({ session: sessionId })`: Menanyakan ke Laravel apakah ada cadangan **yang layak**. Melempar galat kalau Laravel tidak terjangkau.
+
+Laravel menyimpan **tiga** cadangan terakhir per sesi (`SessionBackup::SIMPAN`), menolak unggahan yang kredensialnya tidak layak (`App\Support\CadanganSesi`, aturannya sama persis dengan `nilaiKredensial()` di engine), dan selalu menyajikan cadangan terbaru yang layak.
 
 ---
 
@@ -177,3 +204,11 @@ curl http://127.0.0.1:3100/health
 - `Sesi siap`: Sesi berhasil tersambung ke WhatsApp.
 - `Backup sesi terkirim`: Kredensial berhasil dicadangkan ke Laravel.
 - `Mencoba menyambung kembali websocket`: Percobaan reconnect otomatis akibat gangguan jaringan.
+- `Koneksi websocket terputus` (dengan `statusCode` dan `golongan`): titik awal setiap penyelidikan "kenapa nomor ini putus". Riwayat yang sama tersimpan di panel admin (Sesi WhatsApp → nama sesi).
+- `Menunggu engine lain melepas data sesi` → `Kunci data sesi diperoleh`: deploy bertumpuk yang ditangani dengan benar.
+- `Versi WhatsApp Web diperbarui`: versi handshake berganti.
+- `creds.json rusak; disingkirkan`: berkas kredensial terpotong. Salinannya di `{folder sesi}.rusak`.
+- `Backup dibatalkan: creds.json rusak atau belum tertaut`: pencadangan yang sengaja dilewati.
+- `Tidak ada kredensial yang bisa dipulihkan; sesi tidak dijalankan`: jalur otomatis menolak memunculkan QR tanpa penonton.
+
+`npm --prefix engine run dev` menjalankan engine **tanpa** `--watch`: restart di tengah scan QR membuang hasil scan-nya. Yang butuh muat-ulang otomatis memakai `dev:watch`, dan tidak sambil menautkan nomor.

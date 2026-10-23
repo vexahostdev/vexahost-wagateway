@@ -7,6 +7,7 @@ use App\Models\Workspace;
 use App\Services\Providers\ProviderManager;
 use App\Support\EngineError;
 use App\Support\KapasitasPlatform;
+use App\Support\PhoneNumber;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -58,15 +59,28 @@ class SessionService
         ]);
     }
 
-    public function connect(WaSession $session): WaSession
+    /**
+     * @param  bool  $otomatis  true untuk penjadwal: sesinya hanya boleh
+     *                          DIPULIHKAN dari kredensial yang ada. Tanpa
+     *                          kredensial, engine menolak menjalankannya alih-alih
+     *                          memunculkan kode QR yang tidak ditatap siapa pun.
+     */
+    public function connect(WaSession $session, bool $otomatis = false): WaSession
     {
+        // `disconnect_reason` ikut dikosongkan: menekan Hubungkan adalah
+        // keputusan manusia untuk mencoba lagi, termasuk untuk nomor yang tadi
+        // diblokir atau diambil alih. Kalau keadaannya masih sama, engine akan
+        // melaporkan alasan yang sama lagi.
         $session->update([
             'status' => 'connecting',
             'last_error' => null,
+            'disconnect_reason' => null,
         ]);
 
+        $session->catatKejadian('connect_requested', $otomatis ? 'otomatis' : 'manual');
+
         try {
-            $this->providers->for($session)->startSession($session);
+            $this->providers->for($session)->startSession($session, $otomatis);
         } catch (ConnectionException $e) {
             // Engine tidak terjangkau itu keadaan sementara — paling sering
             // karena container-nya sedang di-deploy ulang. Menandainya `failed`
@@ -103,6 +117,8 @@ class SessionService
 
         $session->update(['status' => 'disconnected', 'qr_payload' => null]);
 
+        $session->catatKejadian('stopped');
+
         return $session;
     }
 
@@ -120,9 +136,12 @@ class SessionService
             'phone_number' => null,
             'push_name' => null,
             'connected_at' => null,
+            'disconnect_reason' => null,
         ]);
 
-        $session->backups()->delete();
+        $session->hapusCadangan();
+
+        $session->catatKejadian('unlinked');
 
         return $session;
     }
@@ -156,6 +175,8 @@ class SessionService
             $perubahan = ['status' => $status];
 
             if ($status === 'connected') {
+                $session->catatNomorTertaut(PhoneNumber::normalize($state['phone_number'] ?? null));
+
                 $perubahan += [
                     'phone_number' => $state['phone_number'] ?? $session->phone_number,
                     'push_name' => $state['push_name'] ?? $session->push_name,
@@ -192,6 +213,7 @@ class SessionService
         // berikutnya.
         if ($state['status'] === 'connected') {
             $perubahan['connect_failures'] = 0;
+            $session->catatNomorTertaut(PhoneNumber::normalize($state['phone_number'] ?? null));
         }
 
         $session->update($perubahan);

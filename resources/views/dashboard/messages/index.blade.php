@@ -67,6 +67,15 @@
                                 <td class="px-5 py-2">
                                     @php $lm = \App\Support\StatusBadge::message($m->status); @endphp
                                     <x-badge :warna="$lm['warna']">{{ $lm['label'] }}</x-badge>
+                                    {{-- Tanpa ini pesan yang ditunda masa pemanasan terbaca
+                                         sebagai "mengantre" berjam-jam — persis seperti
+                                         antrean yang macet. --}}
+                                    @if ($m->status === 'queued' && $m->scheduled_at?->isFuture())
+                                        <span class="mt-0.5 block whitespace-nowrap text-xs text-muted-foreground"
+                                              title="Ditunda masa pemanasan nomor pengirim">
+                                            dikirim {{ $m->scheduled_at->translatedFormat('j M, H:i') }}
+                                        </span>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

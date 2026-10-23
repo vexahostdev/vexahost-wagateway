@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\Subscription;
 use App\Models\WaSession;
 use App\Models\Workspace;
+use App\Support\AlasanPutus;
 
 /**
  * Isi seluruh pemberitahuan WhatsApp, di satu tempat.
@@ -117,15 +118,46 @@ class BillingMessages
      * Ini pemberitahuan paling berharga di produk ini: gateway yang mati diam
      * membuat pelanggan baru sadar setelah berhari-hari pesan tidak terkirim,
      * saat pelanggan *mereka* yang mengeluh.
+     *
+     * Kalau engine melaporkan alasannya, alasan itu yang disebut — "akun
+     * diblokir" dan "perangkat dihapus dari ponsel" menuntut tindakan yang
+     * sama sekali berbeda, dan tebakan "penyebab tersering" menyesatkan
+     * keduanya.
      */
-    public static function sessionDisconnected(WaSession $session): string
+    public static function sessionDisconnected(WaSession $session, ?string $alasan = null): string
     {
-        return "*Nomor WhatsApp Anda terputus* ⚠️\n\n"
+        $pembuka = "*Nomor WhatsApp Anda terputus* ⚠️\n\n"
             ."Sesi *{$session->name}* di workspace *{$session->workspace?->name}* "
-            ."tidak lagi tersambung, jadi pesan keluar dari nomor itu berhenti terkirim.\n\n"
+            ."tidak lagi tersambung, jadi pesan keluar dari nomor itu berhenti terkirim.\n\n";
+
+        if ($alasan !== null) {
+            return $pembuka
+                .AlasanPutus::kalimat($alasan)."\n\n"
+                .'Tombol Hubungkan ada di halaman Sesi di dashboard.';
+        }
+
+        return $pembuka
             .'Penyebab tersering: perangkat ditautkan ulang dari ponsel, atau WhatsApp '
             ."memutus tautan karena ponselnya lama tidak online.\n\n"
             .'Buka halaman Sesi di dashboard untuk menghubungkannya lagi.';
+    }
+
+    /**
+     * Banyak pesan dari satu nomor tidak sampai ke ponsel penerima.
+     *
+     * Dikirim sebelum nomornya diblokir, saat masih ada yang bisa dilakukan.
+     * Kalimatnya sengaja tidak menyuruh berhenti mengirim sama sekali: yang
+     * membahayakan nomor hampir selalu kiriman ke orang yang tidak mengenal
+     * pengirimnya, bukan notifikasi ke pelanggan sendiri.
+     */
+    public static function deliveryLow(WaSession $session, int $total, int $tertahan, int $jam): string
+    {
+        return "*Banyak pesan Anda tidak sampai* ⚠️\n\n"
+            ."Dari nomor *{$session->name}* di workspace *{$session->workspace?->name}*, "
+            ."{$tertahan} dari {$total} pesan belum sampai ke ponsel penerima setelah {$jam} jam. "
+            ."Ini tanda paling awal nomor sedang dibatasi WhatsApp.\n\n"
+            .'Kurangi dulu pengiriman ke nomor yang belum pernah menghubungi Anda, dan buka WhatsApp '
+            .'di ponsel untuk melihat apakah ada peringatan dari WhatsApp.';
     }
 
     /** Kuota hampir habis. */

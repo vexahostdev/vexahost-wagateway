@@ -108,11 +108,13 @@ php artisan migrate --force && php artisan optimize:clear && php artisan config:
 | Nama volume | Mount path | Kalau terlewat |
 |---|---|---|
 | `wa-storage` | `/app/storage/app/private` | Cadangan sesi & media terhapus setiap deploy |
-| `wa-sessions` | `/data` | Chromium kehilangan berkas kerjanya tiap restart; sesi masih pulih dari cadangan di Laravel, tapi jauh lebih lambat |
+| `wa-sessions` | `/data` | Kredensial terbaru di volume hilang tiap deploy; sesi pulih dari cadangan di Laravel, yang bisa tertinggal sampai satu interval pencadangan (5 menit) |
 
 Nama volume per tahap: `wa-storage-staging` / `wa-sessions-staging`, `wa-storage-dev` / `wa-sessions-dev`.
 
-> Yang benar-benar menyelamatkan sesi adalah cadangan di Laravel (`wa-storage`), bukan `/data`. `RemoteAuth.extractRemoteSession()` selalu mengosongkan isi `/data` setiap sesi dijalankan lalu memulihkannya dari store.
+> Sejak Baileys, `/data` adalah sumber utama: kredensial di volume selalu dipakai lebih dulu karena paling baru. Cadangan di Laravel (`wa-storage`) hanya dipakai kalau `creds.json` di volume hilang atau rusak — dan engine memilih cadangan terbaru yang **layak**, bukan sekadar yang terbaru. (Catatan lama tentang `RemoteAuth.extractRemoteSession()` yang mengosongkan `/data` hanya berlaku di era whatsapp-web.js.)
+>
+> Volume ini juga memuat `.engine.lock`. Coolify menyalakan container baru sebelum menghentikan yang lama, dan keduanya memasang volume yang sama; engine baru menunggu kunci itu dilepas sebelum membuka port, supaya dua engine tidak pernah memegang kredensial yang sama. Log yang menandainya: `Menunggu engine lain melepas data sesi` lalu `Kunci data sesi diperoleh`.
 
 **Scheduled Task: tidak perlu lagi.** Penjadwal berjalan sebagai proses di dalam `start.sh`. Kalau resource lama punya Scheduled Task `php artisan schedule:run`, hapus — kalau tidak, penjadwalnya berjalan dua kali.
 
@@ -144,7 +146,9 @@ Cara menyetel `WA_MAX_SESSIONS`: sisakan minimal 1,5 GB untuk sistem, Coolify, M
 | 8 GB | 3 |
 | 16 GB | 8 |
 
-Angka bawaannya sekarang **3**, turun dari 10. Sepuluh sesi berarti sampai 5 GB hanya untuk Chromium — dan yang dibunuh OOM killer belum tentu Chromium-nya, bisa saja MySQL.
+Angka bawaannya sempat **3**, turun dari 10. Sepuluh sesi berarti sampai 5 GB hanya untuk Chromium — dan yang dibunuh OOM killer belum tentu Chromium-nya, bisa saja MySQL.
+
+> **Tabel dan rumus di atas berlaku untuk era Chromium.** Sejak engine pindah ke Baileys, satu sesi hanya satu koneksi websocket tanpa peramban, dan produksi dinaikkan ke `WA_MAX_SESSIONS=20` — berjalan aman (23 Okt 2026). Biaya per sesi Baileys belum diukur resmi, jadi belum ada rumus penggantinya. Patokannya sekarang pengamatan: `rss_mb` di `/health` engine dan baris `available` di `free -h` saat sesi yang tersambung bertambah. Arsip pesan untuk kirim ulang dibatasi ±1,5 MB per sesi (`engine/src/arsip-kirim.js`), jadi tidak ikut membengkak.
 
 Dev dan staging disetel `WA_MAX_SESSIONS=1`: keduanya hanya perlu membuktikan satu sesi berfungsi, dan tiap sesi tambahan di sana memakan RAM yang seharusnya melayani produksi.
 
@@ -249,11 +253,13 @@ Karena itu engine lama **dihentikan lebih dulu**, bukan belakangan. Ada jeda lay
 
 | Gejala | Kemungkinan penyebab |
 |---|---|
-| Sesi mentok `connecting` | Chromium gagal jalan — cek log; biasanya RAM kurang atau library sistem tidak lengkap |
-| `Could not find Chrome` di kartu sesi | `PUPPETEER_CACHE_DIR` belum diisi, atau belum ikut dipasang di Install Command. Log saat boot memuat blok `CHROMIUM TIDAK DITEMUKAN` beserta perbaikannya |
+| Sesi mentok `connecting` | Engine tidak bisa membuka websocket ke WhatsApp — cek log engine untuk `Koneksi websocket terputus` beserta `statusCode`-nya |
+| Nomor putus tanpa sebab yang jelas | Buka **Admin → Sesi WhatsApp → nama sesi**: riwayat koneksi menyebut alasan dan kodenya (401 dikeluarkan WhatsApp, 403 ditolak, 440 diambil alih). Putus yang selalu jatuh sesaat setelah "Dipulihkan saat engine menyala" menunjuk ke deploy |
+| Semua sesi gagal menyambung bersamaan dengan kode 405 | Versi WhatsApp Web ditolak. Engine menyegarkannya sendiri; kalau `WA_WEB_VERSION` diisi, versi itu dipatok dan tidak pernah disegarkan — kosongkan |
+| Deploy lama sekali sebelum sesi kembali | Engine baru menunggu engine lama melepas `.engine.lock`. Maksimal ±30 detik kalau engine lama mati paksa; lebih dari 3 menit diambil alih paksa |
 | Semua callback ditolak 401 | `ENGINE_HMAC_SECRET` berbeda antara blok Laravel dan blok engine di env yang sama |
 | `Token engine tidak valid` | `ENGINE_TOKEN` berbeda antara keduanya |
-| Sesi minta QR ulang tiap deploy | Volume `wa-storage` belum ter-mount, atau `matikan()` di `start.sh` tidak sempat berjalan — naikkan grace period stop di Coolify |
+| Sesi minta QR ulang tiap deploy | Volume `wa-sessions` atau `wa-storage` belum ter-mount, atau `matikan()` di `start.sh` tidak sempat berjalan — naikkan grace period stop di Coolify. Log `creds.json rusak; disingkirkan` berarti berkas kredensial terpotong; salinannya ada di `<folder sesi>.rusak` |
 | Pesan mentok `queued` | Worker tidak berjalan — Start Command masih `php artisan serve`, bukan `bash ./start.sh` |
 | Deploy selesai tapi nol sesi aktif | Engine tidak berhasil menghubungi Laravel saat boot. Cek log: `Bootstrap belum berhasil` |
 | Engine restart berulang | Kehabisan memori — turunkan `WA_MAX_SESSIONS` |

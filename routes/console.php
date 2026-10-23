@@ -5,6 +5,7 @@ use App\Jobs\BillingCycleJob;
 use App\Jobs\EksekusiPenghapusanAkunJob;
 use App\Jobs\KabariDaftarTungguJob;
 use App\Jobs\PantauKesehatanJob;
+use App\Jobs\PantauNomorJob;
 use App\Jobs\PruneOldRecordsJob;
 use App\Jobs\RekamStatusJob;
 use App\Jobs\SyncSessionStatusJob;
@@ -36,6 +37,9 @@ Schedule::job(new BillingCycleJob)->dailyAt('08:00')->withoutOverlapping();
 | ini berjalan.
 */
 Schedule::job(new PantauKesehatanJob)->hourly()->withoutOverlapping();
+
+// Peringatan dini nomor yang mulai dibatasi WhatsApp — lihat PantauNomorJob.
+Schedule::job(new PantauNomorJob)->hourly()->withoutOverlapping();
 
 /*
 | Mengabari daftar tunggu kapasitas, tiap jam.

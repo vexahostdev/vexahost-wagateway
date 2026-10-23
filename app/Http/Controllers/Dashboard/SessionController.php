@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureWorkspaceSelected;
 use App\Models\AuditLog;
 use App\Models\WaSession;
+use App\Services\RemPengiriman;
 use App\Services\SessionService;
 use App\Support\EngineError;
 use Illuminate\Contracts\View\View;
@@ -18,11 +19,36 @@ class SessionController extends Controller
 {
     public function __construct(private readonly SessionService $sessions) {}
 
-    public function index(Request $request): View
+    public function index(Request $request, RemPengiriman $rem): View
     {
+        $sessions = EnsureWorkspaceSelected::from($request)->sessions()->orderBy('name')->get();
+
         return view('dashboard.sessions.index', [
-            'sessions' => EnsureWorkspaceSelected::from($request)->sessions()->orderBy('name')->get(),
+            'sessions' => $sessions,
+            // Ditampilkan di tiap kartu supaya pesan yang ditunda tidak pernah
+            // terasa seperti gateway yang lambat: angkanya dan jalan keluarnya
+            // ada di tempat yang sama.
+            'pemanasan' => $sessions->mapWithKeys(fn (WaSession $s) => [$s->id => $rem->statusPemanasan($s)]),
         ]);
+    }
+
+    /**
+     * Pemilik menyatakan nomornya sudah lama aktif di ponsel, jadi tidak perlu
+     * dipanaskan. Risikonya dijelaskan di dialog konfirmasi; keputusannya milik
+     * pemilik nomor.
+     */
+    public function skipWarmup(Request $request, string $id, RemPengiriman $rem): RedirectResponse
+    {
+        $session = $this->find($request, $id);
+
+        $dilepas = $rem->lewatiPemanasan($session);
+
+        $session->catatKejadian('warmup_skipped', null, null, $dilepas > 0 ? "{$dilepas} pesan terjadwal dilepas" : null);
+        AuditLog::record('session.warmup_skipped', $session, ['pesan_dilepas' => $dilepas]);
+
+        return back()->with('status', $dilepas > 0
+            ? "Masa pemanasan dilewati. {$dilepas} pesan yang tadinya terjadwal mulai dikirim sekarang."
+            : 'Masa pemanasan dilewati. Pengiriman dari nomor ini tidak lagi dibatasi per hari.');
     }
 
     public function store(Request $request): RedirectResponse

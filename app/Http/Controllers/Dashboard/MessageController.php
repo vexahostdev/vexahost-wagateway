@@ -84,7 +84,9 @@ class MessageController extends Controller
             }
 
             return redirect()->route('messages.index')
-                ->with('status', "Pesan diantre (ID {$message->id}).");
+                ->with('status', $message->scheduled_at
+                    ? "Pesan dijadwalkan {$message->scheduled_at->translatedFormat('j M, H:i')} karena nomor pengirim masih dalam masa pemanasan (ID {$message->id})."
+                    : "Pesan diantre (ID {$message->id}).");
         }
 
         $result = $this->dispatcher->queueBulk($session, $recipients, [
@@ -93,6 +95,12 @@ class MessageController extends Controller
         ]);
 
         $note = count($result['messages']).' pesan diantre.';
+
+        $terjadwal = count(array_filter($result['messages'], fn ($m) => $m->scheduled_at !== null));
+
+        if ($terjadwal > 0) {
+            $note .= " {$terjadwal} di antaranya dijadwalkan ke hari berikutnya karena nomor pengirim masih dalam masa pemanasan.";
+        }
 
         if ($result['rejected'] !== []) {
             $note .= ' '.count($result['rejected']).' nomor ditolak: '

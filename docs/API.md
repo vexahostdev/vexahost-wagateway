@@ -309,6 +309,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/text \
     "batch_id": null,
     "wa_message_id": null,
     "created_at": "2026-08-13T14:03:11+07:00",
+    "scheduled_at": null,
     "sent_at": null,
     "delivered_at": null,
     "read_at": null
@@ -316,7 +317,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/text \
 }
 ```
 
-Simpan `data.id` untuk menelusuri statusnya.
+Simpan `data.id` untuk menelusuri statusnya. `scheduled_at` terisi untuk pesan yang ditunda masa pemanasan nomor pengirim (`App\Services\RemPengiriman`): diterima, kuotanya tercatat, dan dikirim otomatis pada waktu itu.
 
 **Pemilihan sesi otomatis:** bila `session_id` kosong, dipakai sesi pertama yang berstatus `connected`. Isi `session_id` hanya kalau workspace punya beberapa nomor dan pengirimnya harus dikunci.
 
@@ -325,6 +326,8 @@ Galat `422`:
 - `Kuota pesan bulan ini sudah habis (1000 pesan).`
 - `Workspace sedang tidak aktif.`
 - `Tidak ada sesi WhatsApp yang bisa dipakai. Hubungkan satu sesi terlebih dahulu.`
+- `Penerima 62… sudah meminta berhenti menerima pesan …` — penerima membalas STOP; tidak memotong kuota
+- `Pengiriman ke 62… ditahan sementara: lebih dari 40 pesan dalam 10 menit …` — rem balas-balasan bot; tidak memotong kuota
 
 ### `POST /messages/media`
 
@@ -373,6 +376,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/bulk \
   "data": {
     "batch_id": "01K2CDEFGH7JKMNPQRSTVWXYZ",
     "queued": 2,
+    "scheduled": 0,
     "rejected": [
       { "to": "bukan-nomor", "reason": "Nomor tujuan tidak valid: bukan-nomor" }
     ],
@@ -381,7 +385,7 @@ curl -X POST https://wa.vexahostcloud.my.id/api/v1/messages/bulk \
 }
 ```
 
-Nomor yang rusak dikumpulkan di `rejected` tanpa membatalkan sisanya. Nomor ganda dibuang otomatis.
+Nomor yang rusak dikumpulkan di `rejected` tanpa membatalkan sisanya. Nomor ganda dibuang otomatis. `scheduled` adalah bagian dari `queued` yang ditunda masa pemanasan.
 
 Pantau kemajuannya dengan `GET /messages?batch_id=…`.
 
@@ -558,7 +562,9 @@ Gateway mengirim `POST` JSON ke URL yang didaftarkan.
     "type": "text",
     "body": "Halo, invoice saya sudah dibayar",
     "is_group": false,
-    "received_at": "2026-08-13T14:12:44+07:00"
+    "received_at": "2026-08-13T14:12:44+07:00",
+    "sent_at": "2026-08-13T14:12:41+07:00",
+    "is_backlog": false
   }
 }
 ```
@@ -567,10 +573,14 @@ Gateway mengirim `POST` JSON ke URL yang didaftarkan.
 
 | Event | Kapan | Isi `data` |
 |---|---|---|
-| `message.received` | Ada pesan masuk | `message_id`, `session_id`, `from`, `chat_id`, `type`, `body`, `is_group`, `received_at` |
+| `message.received` | Ada pesan masuk | `message_id`, `session_id`, `from`, `chat_id`, `type`, `body`, `is_group`, `received_at`, `sent_at`, `is_backlog` |
 | `message.status` | Status kirim berubah | `message_id`, `status`, `to`, `error` (bila gagal) |
-| `session.status` | Sesi tersambung/terputus/gagal | `session_id`, `name`, `status`, `phone_number` |
+| `session.status` | Sesi tersambung/terputus/gagal | `session_id`, `name`, `status`, `phone_number`, `reason` |
 | `session.qr` | QR baru tersedia | `session_id`, `status` |
+
+`sent_at` adalah waktu pengirim mengirim pesan (bisa `null`); `is_backlog` bernilai `true` untuk pesan yang menumpuk selama nomor offline dan datang sekaligus saat tersambung lagi — integrasi yang membalas otomatis wajib melewatinya. `reason` pada `session.status` terputus berisi salah satu nilai `App\Support\AlasanPutus` (`connection_lost`, `logged_out`, `credentials_missing`, `banned`, `replaced`); `null` untuk status lain. Penjelasan lengkapnya untuk pelanggan ada di `resources/docs/WEBHOOK.md`.
+
+Pesan masuk yang dikirim ulang WhatsApp (`wa_message_id` yang sama untuk sesi yang sama) hanya dicatat dan diteruskan sekali.
 
 ### Verifikasi tanda tangan
 

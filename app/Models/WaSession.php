@@ -2,11 +2,15 @@
 
 namespace App\Models;
 
+use App\Support\AlasanPutus;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 class WaSession extends Model
 {
@@ -79,6 +83,10 @@ class WaSession extends Model
         'last_seen_at',
         'connected_at',
         'last_error',
+        'disconnect_reason',
+        'warmup_phone',
+        'warmup_started_at',
+        'warmup_skipped_at',
         'meta',
     ];
 
@@ -90,6 +98,8 @@ class WaSession extends Model
             'qr_expires_at' => 'datetime',
             'last_seen_at' => 'datetime',
             'connected_at' => 'datetime',
+            'warmup_started_at' => 'datetime',
+            'warmup_skipped_at' => 'datetime',
             'auto_reconnect' => 'boolean',
             'connect_failures' => 'integer',
             'meta' => 'array',
@@ -196,6 +206,91 @@ class WaSession extends Model
     public function latestBackup(): ?SessionBackup
     {
         return $this->backups()->latest('backed_up_at')->first();
+    }
+
+    /**
+     * Membuang seluruh cadangan kredensial — berkas DAN barisnya.
+     *
+     * `backups()->delete()` yang dulu dipakai cuma menghapus baris; berkasnya
+     * tertinggal di disk tanpa ditunjuk siapa pun, selamanya.
+     */
+    public function hapusCadangan(): void
+    {
+        $this->backups()->get()->each(fn (SessionBackup $backup) => $backup->buang());
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(SessionEvent::class);
+    }
+
+    /**
+     * Waktu-waktu sesi ini diambil alih perangkat lain dalam 24 jam terakhir,
+     * terbaru lebih dulu.
+     *
+     * @return Collection<int, Carbon>
+     */
+    public function diambilAlih24Jam(): Collection
+    {
+        return $this->events()
+            ->where('event', 'disconnected')
+            ->where('reason', AlasanPutus::REPLACED)
+            ->where('created_at', '>=', now()->subDay())
+            ->latest('created_at')
+            ->get(['created_at'])
+            ->pluck('created_at');
+    }
+
+    /**
+     * Mencatat nomor yang tersambung, dan memulai masa pemanasannya kalau
+     * nomor itu baru bagi sesi ini (lihat App\Services\RemPengiriman).
+     *
+     * Dipanggil dari setiap jalur yang bisa menandai sesi tersambung — event
+     * `ready` dan dua penyelaras status. Kalau hanya dari `ready`, nomor baru
+     * yang event-nya hilang di jalan lolos tanpa masa pemanasan sama sekali.
+     *
+     * Umurnya diwarisi dari sesi mana pun — termasuk yang sudah dihapus — yang
+     * pernah memegang nomor yang sama. Tanpa itu, menghapus lalu membuat ulang
+     * sesi, atau memindahkan nomor ke workspace lain, mengulang masa pemanasan
+     * dari nol untuk nomor yang sudah berbulan-bulan dipakai.
+     */
+    public function catatNomorTertaut(?string $nomor): void
+    {
+        if ($nomor === null || $this->warmup_phone === $nomor) {
+            return;
+        }
+
+        $riwayat = static::withTrashed()->where('warmup_phone', $nomor)->whereKeyNot($this->getKey());
+
+        $this->forceFill([
+            'warmup_phone' => $nomor,
+            'warmup_started_at' => (clone $riwayat)->min('warmup_started_at') ?? now(),
+            'warmup_skipped_at' => (clone $riwayat)->whereNotNull('warmup_skipped_at')->exists() ? now() : null,
+        ])->save();
+    }
+
+    /**
+     * Mencatat satu kejadian di riwayat koneksi.
+     *
+     * Riwayat itu pelengkap: kegagalan menulisnya tidak boleh menggagalkan
+     * peristiwa yang sedang dicatat.
+     */
+    public function catatKejadian(string $event, ?string $reason = null, ?int $statusCode = null, ?string $detail = null): void
+    {
+        try {
+            $this->events()->create([
+                'event' => $event,
+                'reason' => $reason,
+                'status_code' => $statusCode,
+                'detail' => $detail === null ? null : mb_substr($detail, 0, 255),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Riwayat koneksi sesi gagal dicatat', [
+                'session_id' => $this->id,
+                'event' => $event,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function isConnected(): bool

@@ -92,6 +92,8 @@ class PangkasCommand extends Command
             'failed_jobs' => "{$r['failed_jobs_days']} hari",
             'job_batches' => "{$r['job_batches_days']} hari setelah selesai",
             'status_daily' => "{$r['status_daily_days']} hari",
+            'session_events' => "{$r['session_events_days']} hari",
+            'warmup_counters' => '7 hari setelah harinya lewat',
             'cache' => 'setelah kedaluwarsa',
             'password_reset_tokens' => '1 hari',
             default => '-',

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Internal;
 
 use App\Http\Controllers\Controller;
+use App\Models\SessionEvent;
 use App\Models\WaSession;
+use App\Support\AlasanPutus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -74,6 +76,12 @@ class BootstrapController extends Controller
              | manusia yang menyentuhnya.
             */
             ->where('connect_failures', '<', WaSession::BATAS_PERCOBAAN_SAMBUNG)
+            // Nomor yang ditolak WhatsApp atau diambil alih perangkat lain
+            // menunggu manusia — alasannya sama dengan di SyncSessionStatusJob.
+            // NULL ditulis eksplisit: `NOT IN` atas NULL bernilai NULL dan akan
+            // membuang seluruh sesi yang tidak pernah putus sama sekali.
+            ->where(fn ($q) => $q->whereNull('disconnect_reason')
+                ->orWhereNotIn('disconnect_reason', [AlasanPutus::BANNED, AlasanPutus::REPLACED]))
             ->get(['id', 'name', 'status']);
 
         /*
@@ -95,6 +103,10 @@ class BootstrapController extends Controller
                 ->whereIn('id', $sessions->pluck('id'))
                 ->increment('connect_failures');
         }
+
+        // Penanda "engine menyala ulang" di riwayat tiap sesi — tanpanya
+        // logout yang selalu terjadi sesaat setelah deploy tidak terlihat polanya.
+        SessionEvent::catatBanyak($sessions->pluck('id'), 'restore_requested', 'boot');
 
         return response()->json([
             'success' => true,

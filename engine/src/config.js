@@ -100,10 +100,16 @@ export const config = {
     initTimeoutMs: angka('WA_INIT_TIMEOUT_MS', 180_000),
 
     /**
-     * Versi protokol WhatsApp Web untuk handshake Baileys.
-     * Dapat dioverride lewat environment variable WA_WEB_VERSION (format '2.3000.1043857760').
+     * Versi protokol WhatsApp Web untuk handshake Baileys — titik awal saja.
+     * Engine menyegarkannya sendiri dari WhatsApp Web (lihat versi-wa.js),
+     * KECUALI `WA_WEB_VERSION` diisi (format '2.3000.1043857760'): nilai itu
+     * dipatok dan tidak pernah diganti.
      */
     waWebVersion: parseWaWebVersion(process.env.WA_WEB_VERSION),
+
+    // Nilai yang tidak bisa dibaca tidak dihitung sebagai patokan. Kalau
+    // dihitung, satu salah ketik di env diam-diam mematikan penyegaran versi.
+    waWebVersionDipatok: parseWaWebVersion(process.env.WA_WEB_VERSION, null) !== null,
 
     logLevel: process.env.ENGINE_LOG_LEVEL || process.env.LOG_LEVEL || 'info',
 };
