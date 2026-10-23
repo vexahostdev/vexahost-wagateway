@@ -26,6 +26,7 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\DataRightsController;
 use App\Http\Controllers\Dashboard\MessageController;
 use App\Http\Controllers\Dashboard\MitraController;
+use App\Http\Controllers\Dashboard\OptOutController;
 use App\Http\Controllers\Dashboard\ProfileController;
 use App\Http\Controllers\Dashboard\SessionController;
 use App\Http\Controllers\Dashboard\TemplateController;
@@ -326,6 +327,7 @@ Route::middleware('auth')->group(function (): void {
         Route::post('sessions/{id}/connect', [SessionController::class, 'connect'])->name('sessions.connect');
         Route::post('sessions/{id}/disconnect', [SessionController::class, 'disconnect'])->name('sessions.disconnect');
         Route::post('sessions/{id}/logout', [SessionController::class, 'logout'])->name('sessions.logout');
+        Route::post('sessions/{id}/lewati-pemanasan', [SessionController::class, 'skipWarmup'])->name('sessions.warmup.skip');
         Route::delete('sessions/{id}', [SessionController::class, 'destroy'])->name('sessions.destroy');
         Route::get('sessions/{id}/status', [SessionController::class, 'status'])->name('sessions.status');
 
@@ -339,6 +341,9 @@ Route::middleware('auth')->group(function (): void {
         Route::post('templates/bawaan/{slug}', [TemplateController::class, 'copyBuiltin'])->name('templates.copy');
         Route::put('templates/{id}', [TemplateController::class, 'update'])->name('templates.update');
         Route::delete('templates/{id}', [TemplateController::class, 'destroy'])->name('templates.destroy');
+
+        Route::get('berhenti-berlangganan', [OptOutController::class, 'index'])->name('opt-outs.index');
+        Route::delete('berhenti-berlangganan/{id}', [OptOutController::class, 'destroy'])->name('opt-outs.destroy');
 
         Route::get('api-keys', [ApiKeyController::class, 'index'])->name('api-keys.index');
         Route::post('api-keys', [ApiKeyController::class, 'store'])->name('api-keys.store');
@@ -401,6 +406,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('pembayaran-paket/harga', [AdminPaymentSettingController::class, 'savePrices'])->name('payment-settings.prices');
 
     Route::get('sesi', [AdminSessionController::class, 'index'])->name('sessions');
+    Route::get('sesi/{id}', [AdminSessionController::class, 'show'])->name('sessions.show');
     Route::post('sesi/{id}/putus', [AdminSessionController::class, 'disconnect'])->name('sessions.disconnect');
 
     Route::get('pesan', AdminMessageController::class)->name('messages');

@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import process from 'node:process';
 import { test } from 'node:test';
 import { DisconnectReason, WAMessageStatus } from '@whiskeysockets/baileys';
@@ -9,6 +12,7 @@ process.env.ENGINE_HMAC_SECRET = 'uji';
 process.env.LARAVEL_URL = 'http://127.0.0.1:9';
 process.env.ENGINE_LOG_LEVEL = 'silent';
 process.env.WA_INIT_TIMEOUT_MS = '150';
+process.env.WA_DATA_PATH = await mkdtemp(path.join(tmpdir(), 'vexahost-wa-manager-'));
 
 const { SessionManager, mapType, mapAck, extractBody, toContractChatId } = await import(
     '../src/session-manager.js'

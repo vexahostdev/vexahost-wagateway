@@ -318,12 +318,15 @@ Yang kami kirim:
     "session_id": "01k3m8x...",
     "name": "Nomor CS",
     "status": "disconnected",
-    "phone_number": "628123456789"
+    "phone_number": "628123456789",
+    "reason": "connection_lost"
   }
 }
 ```
 
 Nilai `status` yang mungkin: `connecting`, `qr`, `connected`, `disconnected`, `failed`.
+
+Untuk `disconnected`, kolom `reason` menyebut apakah nomornya akan pulih sendiri (`connection_lost`, dan `replaced` yang pertama dalam sehari) atau perlu ditangani manusia (`logged_out`, `credentials_missing`, `banned`). Arti tiap nilainya ada di [Webhook](webhook). Gunakan ini untuk menentukan siapa yang perlu dibangunkan: `connection_lost` biasanya pulih dalam beberapa menit, sedangkan `logged_out` tidak akan pulih sampai seseorang men-scan QR.
 
 ### Menerimanya di Laravel
 
@@ -398,7 +401,7 @@ Halaman untuk manusia ada di **https://{{legal.domain}}/status**, lengkap dengan
 
 ## 5. Yang TIDAK akan terlihat dari pemantauan mana pun
 
-Satu hal yang perlu Anda ketahui sebelum menyusun peringatan otomatis: **pemblokiran nomor Anda oleh WhatsApp tidak selalu tampak sebagai `disconnected`.**
+Satu hal yang perlu Anda ketahui sebelum menyusun peringatan otomatis: **pemblokiran nomor Anda oleh WhatsApp tidak selalu tampak sebagai `disconnected`.** Yang terlihat sebagai `disconnected` dengan `reason: "banned"` hanya nomor yang sambungannya benar-benar ditolak; pembatasan yang lebih ringan sering tidak memutus sambungan sama sekali.
 
 Nomor yang dibatasi Meta bisa tetap terbaca `connected` sementara pesannya tidak sampai ke penerima. Yang menandakannya bukan status sesi melainkan **lonjakan `usage.messages_failed`** pada `/api/v1/health`.
 

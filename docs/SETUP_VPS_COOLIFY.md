@@ -241,7 +241,7 @@ Pastikan opsi **Connect To Predefined Network** diaktifkan (di tab Configuration
 | `ENGINE_PORT`, `ENGINE_HOST`, `ENGINE_LOG_LEVEL` | `3100`, `127.0.0.1`, `info` — berawalan karena `PORT`/`HOST`/`LOG_LEVEL` polos sudah dipakai Laravel & Coolify |
 | `LARAVEL_URL` | `http://127.0.0.1:80` |
 | `WA_DATA_PATH` | `/data/.wwebjs_auth` |
-| `WA_MAX_SESSIONS` | `3` di produksi, `1` di dev/staging — lihat Bagian 8 |
+| `WA_MAX_SESSIONS` | `20` di produksi (sejak Baileys), `1` di dev/staging — lihat Bagian 8 |
 
 > **Pastikan `APP_DEBUG=false`.** Kalau `true`, halaman error menampilkan seluruh isi environment — termasuk password database dan secret HMAC.
 

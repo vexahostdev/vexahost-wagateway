@@ -6,7 +6,7 @@
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <x-stat label="Sesi hidup" :nilai="$hidup.'/'.$kapasitas"
-                sub="tiap sesi memakan 300–500 MB RAM"
+                sub="tersambung, menyambung, atau menunggu scan"
                 :nada="$persen >= 90 ? 'bahaya' : ($persen >= 70 ? 'perhatian' : 'netral')"
                 ikon="M12 2a10 10 0 1 0 4.9 18.7L22 22l-1.3-5.1A10 10 0 0 0 12 2z" />
 
@@ -50,7 +50,9 @@
                 <tbody class="divide-y divide-border">
                     @forelse ($sessions as $session)
                         <tr class="transition hover:bg-muted/40">
-                            <td class="px-5 py-2.5 font-medium">{{ $session->name }}</td>
+                            <td class="px-5 py-2.5 font-medium">
+                                <a href="{{ route('admin.sessions.show', $session->id) }}" class="hover:text-primary hover:underline">{{ $session->name }}</a>
+                            </td>
                             <td class="px-5 py-2.5 text-muted-foreground">{{ $session->workspace?->name ?? '—' }}</td>
                             <td class="px-5 py-2.5"><x-session-status :status="$session->status" /></td>
                             <td class="px-5 py-2.5 font-mono text-xs text-muted-foreground">{{ $session->phone_number ?? '—' }}</td>

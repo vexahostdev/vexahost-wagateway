@@ -53,48 +53,114 @@ class SessionBackupTest extends TestCase
         return $headers;
     }
 
-    public function test_store_menyimpan_state_baileys_json_dan_checksum(): void
+    /**
+     * Payload cadangan berbentuk asli: creds.json berisi kunci perangkat dan
+     * sudah tertaut ke sebuah nomor. Cadangan selain itu ditolak di setiap
+     * langkah — saat diunggah, saat dipilih, dan oleh engine sendiri.
+     */
+    private function payloadLayak(string $penanda = 'a'): string
     {
-        $jsonPayload = json_encode([
+        $kunci = ['private' => ['type' => 'Buffer', 'data' => base64_encode('priv')], 'public' => ['type' => 'Buffer', 'data' => base64_encode('pub')]];
+
+        return json_encode([
             'version' => 1,
             'sessionId' => $this->session->id,
             'files' => [
-                'creds.json' => json_encode(['me' => '628123456789']),
-                'app-state-sync-key-1.json' => json_encode(['keyData' => 'abc']),
+                'creds.json' => json_encode([
+                    'noiseKey' => $kunci,
+                    'signedIdentityKey' => $kunci,
+                    'registrationId' => 4321,
+                    'me' => ['id' => '628123456789:1@s.whatsapp.net'],
+                ]),
+                'app-state-sync-key-1.json' => json_encode(['keyData' => $penanda]),
             ],
         ]);
+    }
 
-        $digest = hash('sha256', $jsonPayload);
+    private function simpanCadangan(string $isi, string $path, ?\DateTimeInterface $waktu = null): SessionBackup
+    {
+        Storage::disk('session-backups')->put($path, $isi);
+
+        return SessionBackup::create([
+            'wa_session_id' => $this->session->id,
+            'disk' => 'session-backups',
+            'path' => $path,
+            'size' => strlen($isi),
+            'checksum' => hash('sha256', $isi),
+            'backed_up_at' => $waktu ?? now(),
+        ]);
+    }
+
+    private function unggah(string $payload)
+    {
+        $digest = hash('sha256', $payload);
         $path = "internal/engine/session-backup/{$this->session->id}";
-        $headers = $this->signedHeaders($path, $jsonPayload, $digest);
 
-        $response = $this->call(
+        return $this->call(
             'POST',
             '/'.$path,
             [],
             [],
             [],
-            $this->transformHeadersToServerVars($headers + [
+            $this->transformHeadersToServerVars($this->signedHeaders($path, $payload, $digest) + [
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
             ]),
-            $jsonPayload
+            $payload
         );
+    }
+
+    public function test_store_menyimpan_state_baileys_json_dan_checksum(): void
+    {
+        $jsonPayload = $this->payloadLayak();
+        $digest = hash('sha256', $jsonPayload);
+
+        $response = $this->unggah($jsonPayload);
 
         $response->assertOk();
         $response->assertJson(['success' => true, 'data' => ['checksum' => $digest]]);
 
-        // Verifikasi di storage
-        Storage::disk('session-backups')->assertExists("{$this->session->id}/session.json");
-        $saved = Storage::disk('session-backups')->get("{$this->session->id}/session.json");
-        $this->assertSame($jsonPayload, $saved);
-
         // Verifikasi di database
         $backup = SessionBackup::where('wa_session_id', $this->session->id)->first();
         $this->assertNotNull($backup);
-        $this->assertSame("{$this->session->id}/session.json", $backup->path);
+        $this->assertMatchesRegularExpression('#^'.$this->session->id.'/session-.+\.json$#', $backup->path);
         $this->assertSame($digest, $backup->checksum);
         $this->assertSame(strlen($jsonPayload), $backup->size);
+
+        // Verifikasi di storage
+        Storage::disk('session-backups')->assertExists($backup->path);
+        $this->assertSame($jsonPayload, Storage::disk('session-backups')->get($backup->path));
+    }
+
+    public function test_store_menolak_kredensial_yang_rusak_atau_belum_tertaut(): void
+    {
+        // JSON sah, tapi creds.json di dalamnya tidak bisa dipakai menyambung.
+        foreach ([
+            ['creds.json' => json_encode(['me' => ['id' => '628123:1@s.whatsapp.net']])],
+            ['creds.json' => json_encode(['noiseKey' => ['x' => 1], 'signedIdentityKey' => ['x' => 1]])],
+            ['creds.json' => '{"noiseKey":'],
+            ['pre-key-1.json' => '{}'],
+        ] as $files) {
+            $this->unggah(json_encode(['version' => 1, 'files' => $files]))
+                ->assertStatus(422)
+                ->assertJsonPath('error.message', 'Cadangan ditolak: kredensial di dalamnya rusak atau belum tertaut.');
+        }
+
+        $this->assertSame(0, SessionBackup::count());
+    }
+
+    public function test_store_menyimpan_tiga_cadangan_terakhir_dan_membuang_sisanya(): void
+    {
+        foreach (range(1, 5) as $ke) {
+            $this->unggah($this->payloadLayak("ke-{$ke}"))->assertOk();
+        }
+
+        $tersimpan = SessionBackup::where('wa_session_id', $this->session->id)->orderBy('id')->get();
+
+        $this->assertCount(SessionBackup::SIMPAN, $tersimpan);
+        $this->assertStringContainsString('ke-3', Storage::disk('session-backups')->get($tersimpan->first()->path));
+        $this->assertCount(SessionBackup::SIMPAN, Storage::disk('session-backups')->allFiles($this->session->id),
+            'Berkas cadangan yang dibuang harus ikut terhapus dari disk');
     }
 
     public function test_store_menolak_payload_bukan_json(): void
@@ -160,41 +226,37 @@ class SessionBackupTest extends TestCase
         );
         $res1->assertOk()->assertJsonPath('data.exists', false);
 
-        // Buat backup
-        Storage::disk('session-backups')->put("{$this->session->id}/session.json", '{}');
-        SessionBackup::create([
-            'wa_session_id' => $this->session->id,
-            'disk' => 'session-backups',
-            'path' => "{$this->session->id}/session.json",
-            'size' => 2,
-            'checksum' => hash('sha256', '{}'),
-            'backed_up_at' => now(),
-        ]);
+        // Cadangan yang kredensialnya tidak layak tidak dihitung "ada": engine
+        // memakai jawaban ini untuk memutuskan apakah ia memulihkan.
+        $this->simpanCadangan('{}', "{$this->session->id}/session.json");
 
-        $headers2 = $this->signedHeaders($path, '');
         $res2 = $this->call(
             'GET',
             '/'.$path,
             [],
             [],
             [],
-            $this->transformHeadersToServerVars($headers2 + ['Accept' => 'application/json'])
+            $this->transformHeadersToServerVars($this->signedHeaders($path, '') + ['Accept' => 'application/json'])
         );
-        $res2->assertOk()->assertJsonPath('data.exists', true);
+        $res2->assertOk()->assertJsonPath('data.exists', false);
+
+        $this->simpanCadangan($this->payloadLayak(), "{$this->session->id}/session-baru.json");
+
+        $res3 = $this->call(
+            'GET',
+            '/'.$path,
+            [],
+            [],
+            [],
+            $this->transformHeadersToServerVars($this->signedHeaders($path, '') + ['Accept' => 'application/json'])
+        );
+        $res3->assertOk()->assertJsonPath('data.exists', true);
     }
 
     public function test_show_mengunduh_session_json(): void
     {
-        $content = json_encode(['auth' => 'valid']);
-        Storage::disk('session-backups')->put("{$this->session->id}/session.json", $content);
-        SessionBackup::create([
-            'wa_session_id' => $this->session->id,
-            'disk' => 'session-backups',
-            'path' => "{$this->session->id}/session.json",
-            'size' => strlen($content),
-            'checksum' => hash('sha256', $content),
-            'backed_up_at' => now(),
-        ]);
+        $content = $this->payloadLayak();
+        $this->simpanCadangan($content, "{$this->session->id}/session.json");
 
         $path = "internal/engine/session-backup/{$this->session->id}";
         $headers = $this->signedHeaders($path, '');
@@ -210,6 +272,31 @@ class SessionBackupTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('X-Backup-Sha256', hash('sha256', $content));
+        $this->assertSame($content, $response->getContent());
+    }
+
+    public function test_show_melewati_cadangan_terbaru_yang_rusak_dan_menyajikan_yang_layak(): void
+    {
+        $sehat = $this->payloadLayak('sehat');
+        $this->simpanCadangan($sehat, "{$this->session->id}/session-lama.json", now()->subMinutes(10));
+
+        // Terpotong — persis yang dihasilkan unggahan yang terputus.
+        $this->simpanCadangan(substr($sehat, 0, 60), "{$this->session->id}/session-baru.json", now());
+
+        $path = "internal/engine/session-backup/{$this->session->id}";
+
+        $response = $this->call(
+            'GET',
+            '/'.$path,
+            [],
+            [],
+            [],
+            $this->transformHeadersToServerVars($this->signedHeaders($path, ''))
+        );
+
+        $response->assertOk();
+        $this->assertSame($sehat, $response->getContent(),
+            'Cadangan terbaru yang rusak tidak boleh menyembunyikan cadangan sehat di bawahnya');
     }
 
     public function test_destroy_menghapus_backup(): void
@@ -223,6 +310,7 @@ class SessionBackupTest extends TestCase
             'checksum' => hash('sha256', '{}'),
             'backed_up_at' => now(),
         ]);
+        $kedua = $this->simpanCadangan($this->payloadLayak(), "{$this->session->id}/session-kedua.json");
 
         $path = "internal/engine/session-backup/{$this->session->id}";
         $headers = $this->signedHeaders($path, '');
@@ -238,6 +326,7 @@ class SessionBackupTest extends TestCase
 
         $response->assertOk();
         Storage::disk('session-backups')->assertMissing("{$this->session->id}/session.json");
+        Storage::disk('session-backups')->assertMissing($kedua->path);
         $this->assertNull(SessionBackup::where('wa_session_id', $this->session->id)->first());
     }
 
@@ -305,17 +394,10 @@ class SessionBackupTest extends TestCase
 
     public function test_wwebjs_provider_menyertakan_backup_yang_formatnya_valid(): void
     {
-        $validJson = json_encode(['version' => 1, 'files' => ['creds.json' => '{}']]);
-        Storage::disk('session-backups')->put("{$this->session->id}/session.json", $validJson);
-
-        SessionBackup::create([
-            'wa_session_id' => $this->session->id,
-            'disk' => 'session-backups',
-            'path' => "{$this->session->id}/session.json",
-            'size' => strlen($validJson),
-            'checksum' => hash('sha256', $validJson),
-            'backed_up_at' => now(),
-        ]);
+        // Nama lama `session.json` tetap terbaca: cadangan yang sudah ada di
+        // produksi sebelum cadangan bergilir tidak boleh mendadak hilang.
+        $validJson = $this->payloadLayak();
+        $this->simpanCadangan($validJson, "{$this->session->id}/session.json");
 
         Http::fake([
             '*/sessions/*/start' => function (Request $request) use ($validJson) {
@@ -331,6 +413,32 @@ class SessionBackupTest extends TestCase
 
         Http::assertSent(fn (Request $req) => $req->data()['has_backup'] === true && $req->data()['backup_data'] === $validJson
         );
+    }
+
+    public function test_wwebjs_provider_mengabaikan_backup_yang_kredensialnya_tidak_layak(): void
+    {
+        $this->simpanCadangan(
+            json_encode(['version' => 1, 'files' => ['creds.json' => '{}']]),
+            "{$this->session->id}/session.json"
+        );
+
+        Http::fake(['*/sessions/*/start' => Http::response(['status' => 'connecting'])]);
+
+        app(WwebjsProvider::class)->startSession($this->session);
+
+        Http::assertSent(fn (Request $req) => $req->data()['has_backup'] === false && ! isset($req->data()['backup_data']));
+    }
+
+    public function test_wwebjs_provider_meneruskan_penanda_hanya_pulihkan(): void
+    {
+        Http::fake(['*/sessions/*/start' => Http::response(['status' => 'credentials_missing'])]);
+
+        app(WwebjsProvider::class)->startSession($this->session, hanyaPulihkan: true);
+        app(WwebjsProvider::class)->startSession($this->session);
+
+        $kiriman = collect(Http::recorded())->map(fn ($pasangan) => $pasangan[0]->data()['restore_only']);
+
+        $this->assertSame([true, false], $kiriman->all());
     }
 
     public function test_perintah_bersihkan_backup_lama_mode_kering_tidak_menghapus_apa_pun(): void

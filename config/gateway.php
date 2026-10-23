@@ -91,6 +91,53 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rem Pengiriman
+    |--------------------------------------------------------------------------
+    |
+    | Rem untuk pola yang membuat nomor dibatasi WhatsApp — lihat
+    | App\Services\RemPengiriman. Angkanya sengaja tidak dibaca dari env: ini
+    | kebijakan produk yang sama untuk seluruh pelanggan, bukan pengaturan
+    | tahap, dan mengubahnya mengubah apa yang dijanjikan di dokumentasi publik
+    | (resources/docs/PRAKTIK_BAIK.md).
+    |
+    */
+
+    'rem' => [
+        // Masa pemanasan nomor yang baru ditautkan: [sampai hari ke-n => batas
+        // pesan per hari]. Sesudah tahap terakhir tidak ada batas harian.
+        // Kuota paket tetap terpakai penuh: Elite (50.000/bulan, 2 nomor) cuma
+        // butuh ±830 pesan per nomor per hari.
+        'pemanasan' => [3 => 50, 7 => 150, 14 => 300, 30 => 1000],
+
+        // Pesan yang melewati batas harian dikirim mulai jam ini keesokan
+        // harinya — bukan tengah malam, saat pesan dari nomor bisnis paling
+        // mungkin dilaporkan sebagai gangguan.
+        'jam_kirim_tertunda' => 8,
+
+        // Lebih dari sekian pesan ke SATU chat dalam jendela ini dianggap dua
+        // sistem yang saling membalas otomatis. Bot yang saling membalas dengan
+        // jeda anti-ban 3–8 detik menghasilkan 75–200 pesan per 10 menit;
+        // percakapan dengan manusia — termasuk dengan AI agent yang membalas
+        // beberapa gelembung sekaligus — jauh di bawah 40.
+        'balas_balasan_maks' => 40,
+        'balas_balasan_menit' => 10,
+
+        // Balasan yang dibaca sebagai permintaan berhenti / berlangganan lagi.
+        // Dicocokkan dengan SELURUH isi pesan (tanpa tanda baca, tanpa beda
+        // huruf besar-kecil), bukan potongan kata: "jangan stop dulu ya" bukan
+        // permintaan berhenti.
+        'kata_berhenti' => ['STOP', 'BERHENTI', 'UNSUBSCRIBE', 'UNSUB', 'STOP PROMO'],
+        'kata_mulai' => ['START', 'MULAI', 'LANJUT'],
+
+        // Peringatan dini: dari minimal sekian pesan yang dikirim antara 26
+        // dan `jam_tunggu` jam lalu, porsi yang belum sampai ke ponsel penerima.
+        'kesehatan_minimal_pesan' => 100,
+        'kesehatan_ambang_tertahan' => 0.5,
+        'kesehatan_jam_tunggu' => 2,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | OTP
     |--------------------------------------------------------------------------
     */
@@ -152,6 +199,10 @@ return [
         // Halaman status menggambar 90 hari; setahun lebih memberi ruang untuk
         // klaim kredit SLA yang diajukan belakangan.
         'status_daily_days' => (int) env('RETENTION_STATUS_DAILY_DAYS', 400),
+
+        // Riwayat koneksi sesi menjawab "kenapa nomor ini putus" — pertanyaan
+        // yang muncul dalam hitungan hari setelah kejadiannya, bukan bulan.
+        'session_events_days' => 90,
     ],
 
     /*

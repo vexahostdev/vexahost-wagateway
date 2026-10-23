@@ -70,7 +70,9 @@ Kalau API key-nya Anda cabut, webhook-nya **tidak ikut terhapus**: ia turun menj
     "type": "text",
     "body": "Halo, pesanan saya sudah sampai mana ya?",
     "is_group": false,
-    "received_at": "2026-08-13T14:12:44+07:00"
+    "received_at": "2026-08-13T14:12:44+07:00",
+    "sent_at": "2026-08-13T14:12:41+07:00",
+    "is_backlog": false
   }
 }
 ```
@@ -79,10 +81,36 @@ Isi `data` per kejadian:
 
 | Kejadian | Isi `data` |
 |---|---|
-| `message.received` | `message_id`, `session_id`, `from`, `chat_id`, `type`, `body`, `is_group`, `received_at` |
+| `message.received` | `message_id`, `session_id`, `from`, `chat_id`, `type`, `body`, `is_group`, `received_at`, `sent_at`, `is_backlog` |
 | `message.status` | `message_id`, `status`, `to`, `error` (bila gagal) |
-| `session.status` | `session_id`, `name`, `status`, `phone_number` |
+| `session.status` | `session_id`, `name`, `status`, `phone_number`, `reason` |
 | `session.qr` | `session_id`, `status` |
+
+### Pesan yang menumpuk saat nomor offline
+
+Saat nomor Anda tersambung kembali setelah terputus, pesan yang masuk selama itu dikirim ke webhook **sekaligus**. Dua kolom membantu Anda membedakannya dari pesan yang baru masuk:
+
+| Kolom | Isi |
+|---|---|
+| `sent_at` | Waktu pengirim mengirim pesan itu. Bisa `null` kalau WhatsApp tidak menyertakannya |
+| `received_at` | Waktu pesan sampai di sistem kami |
+| `is_backlog` | `true` untuk pesan yang menumpuk selama nomor offline |
+
+**Kalau integrasi Anda membalas otomatis** (chatbot, AI agent, auto-reply), jangan membalas pesan dengan `is_backlog: true` atau yang `sent_at`-nya sudah lewat beberapa menit. Membalas seluruh tumpukan sekaligus — termasuk "halo?" dari berjam-jam lalu — adalah lonjakan pesan keluar yang paling sering membuat nomor dibatasi WhatsApp. Pesannya tetap dicatat seperti biasa; yang dilewati cukup balasan otomatisnya.
+
+### Alasan nomor terputus
+
+Untuk `session.status` dengan `status: "disconnected"`, kolom `reason` menyebut sebabnya, supaya sistem Anda tahu apakah nomor itu akan pulih sendiri atau perlu ditangani manusia:
+
+| `reason` | Arti | Pulih sendiri? |
+|---|---|---|
+| `connection_lost` | Sambungan ke WhatsApp putus berulang kali | Ya, kami coba sambungkan lagi otomatis |
+| `logged_out` | WhatsApp mengeluarkan perangkat ini (tautan dihapus dari ponsel, WhatsApp dipasang ulang, atau ponsel lama tidak online) | Tidak — perlu scan QR ulang |
+| `credentials_missing` | Kredensial nomor tidak bisa dipulihkan | Tidak — perlu scan QR ulang |
+| `banned` | WhatsApp menolak sambungan, biasanya karena nomornya diblokir atau dibatasi | Tidak — periksa WhatsApp di ponsel |
+| `replaced` | Perangkat lain tersambung dengan kredensial yang sama | Dicoba sekali lagi otomatis setelah beberapa menit; kalau terulang di hari yang sama, tekan Hubungkan |
+
+Untuk status lain, `reason` bernilai `null`.
 
 ## Verifikasi tanda tangan
 

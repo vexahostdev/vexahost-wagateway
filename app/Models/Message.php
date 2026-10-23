@@ -29,6 +29,7 @@ class Message extends Model
         'attempts',
         'provider_response',
         'batch_id',
+        'scheduled_at',
         'sent_at',
         'delivered_at',
         'read_at',
@@ -38,6 +39,7 @@ class Message extends Model
     {
         return [
             'provider_response' => 'array',
+            'scheduled_at' => 'datetime',
             'sent_at' => 'datetime',
             'delivered_at' => 'datetime',
             'read_at' => 'datetime',

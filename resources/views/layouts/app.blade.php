@@ -49,6 +49,7 @@
             ['rute' => 'messages.compose', 'label' => 'Kirim Pesan', 'ikon' => 'M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z'],
             ['rute' => 'messages.index', 'label' => 'Riwayat Pesan', 'cocok' => ['messages.index', 'messages.show'], 'ikon' => 'M12 8v4l3 2M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z'],
             ['rute' => 'templates.index', 'label' => 'Template', 'ikon' => 'M4 4h16v4H4zM4 12h10v8H4zM18 12h2v8h-2z'],
+            ['rute' => 'opt-outs.index', 'label' => 'Berhenti Berlangganan', 'ikon' => 'M18.4 5.6 5.6 18.4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z'],
         ],
         'Integrasi' => [
             ['rute' => 'api-keys.index', 'label' => 'API Keys', 'ikon' => 'M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7 7 5 5 0 0 1 7-7zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3'],
