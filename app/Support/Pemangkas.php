@@ -92,6 +92,20 @@ class Pemangkas
                 fn (Builder $q) => $q->where('day', '<', now()->subDays($this->hari('status_daily_days'))->toDateString())
             ),
 
+            'session_events' => fn () => $this->potong(
+                'session_events',
+                'id',
+                fn (Builder $q) => $q->where('created_at', '<', now()->subDays($this->hari('session_events_days')))
+            ),
+
+            // Penghitung harian masa pemanasan hanya dibaca untuk hari ini dan
+            // hari-hari ke depan; yang sudah lewat tidak berarti apa-apa lagi.
+            'warmup_counters' => fn () => $this->potong(
+                'warmup_counters',
+                'id',
+                fn (Builder $q) => $q->where('day', '<', now()->subDays(7)->toDateString())
+            ),
+
             // Driver cache database TIDAK pernah membuang kunci kedaluwarsa yang
             // kebetulan tidak pernah dibaca lagi — dan sebagian besar kunci di
             // sini memang begitu: penanda dedupe notifikasi, penanda
@@ -127,7 +141,8 @@ class Pemangkas
     {
         return [
             'messages', 'webhook_deliveries', 'audit_logs', 'notifications', 'otp_codes',
-            'failed_jobs', 'job_batches', 'status_daily', 'cache', 'password_reset_tokens',
+            'failed_jobs', 'job_batches', 'status_daily', 'session_events', 'warmup_counters', 'cache',
+            'password_reset_tokens',
         ];
     }
 

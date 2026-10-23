@@ -18,7 +18,7 @@ Setiap tahap adalah lingkungan yang berdiri sendiri: domain sendiri, database se
 | `ENGINE_URL` | `http://127.0.0.1:3100` | idem | idem |
 | Volume sesi | `wa-sessions-dev` | `wa-sessions-staging` | `wa-sessions` |
 | Volume cadangan | `wa-storage-dev` | `wa-storage-staging` | `wa-storage` |
-| `WA_MAX_SESSIONS` | 1 | 1 | 3 |
+| `WA_MAX_SESSIONS` | 1 | 1 | 20 |
 | Nomor WhatsApp | nomor uji coba | nomor uji coba (boleh sama dengan dev, sesi terpisah) | nomor resmi VexaHost |
 
 > **Satu resource per tahap sejak 17 Agustus 2026.** Engine dan worker tidak lagi punya resource sendiri; keduanya proses di dalam container yang sama (lihat [DEPLOYMENT.md](DEPLOYMENT.md)). Akibatnya untuk berkas ini: **variabel Laravel dan engine berada di satu daftar env yang sama**, dan tiga nama harus diberi awalan supaya tidak bertabrakan — `ENGINE_PORT`, `ENGINE_HOST`, `ENGINE_LOG_LEVEL`. `PORT`, `HOST`, dan `LOG_LEVEL` polos sekarang milik Laravel dan Coolify.
@@ -26,6 +26,8 @@ Setiap tahap adalah lingkungan yang berdiri sendiri: domain sendiri, database se
 > Nama lama masih diterima sebagai cadangan supaya engine tetap bisa dijalankan sendiri saat pengembangan lokal. Yang tidak boleh terjadi diam-diam: `ENGINE_LOG_LEVEL` yang lupa diisi membuat engine mengikuti `LOG_LEVEL=error` milik Laravel, dan baris `Backup sesi terkirim` — satu-satunya bukti cadangan sesi tersimpan — berhenti muncul. `engine/tests/config.test.js` menjaga keempat aturan ini.
 
 > **Nomor tidak boleh dipakai bersama antar tahap.** Satu nomor WhatsApp hanya bisa tertaut ke satu sesi aktif. Kalau nomor produksi dipakai men-scan di staging, sesi produksinya akan terputus — dan notifikasi pelanggan ikut berhenti. Sediakan nomor terpisah untuk dev/staging.
+
+> **`WA_WEB_VERSION` sebaiknya dibiarkan kosong di semua tahap.** Kosong berarti engine mengambil versi WhatsApp Web terbaru saat menyala dan menyegarkannya sendiri (lihat `engine/src/versi-wa.js`); versi bawaan Baileys hanya cadangan kalau web.whatsapp.com tidak terjangkau. Diisi (format `2.3000.1051456098`) berarti versinya **dipatok** dan tidak pernah disegarkan — jalan keluar darurat kalau versi terbaru justru bermasalah, bukan pengaturan tetap. Versi yang dipatok tertinggal diam-diam, sampai suatu hari WhatsApp menolaknya dan seluruh sesi seluruh pelanggan gagal menyambung bersamaan dengan kode 405. Nilai yang tidak bisa dibaca (salah ketik) tidak dihitung sebagai patokan.
 
 ## Sumber kebenaran nilai rahasia
 
@@ -140,10 +142,11 @@ ENGINE_LOG_LEVEL=info
 LARAVEL_URL=http://127.0.0.1:80
 WA_DATA_PATH=/data/.wwebjs_auth
 
-# Tiap sesi = satu Chromium (±300-500 MB). Turun dari 10 pada 17 Agu 2026:
-# RAM-nya sekarang dibagi dengan PHP, worker, penjadwal, MySQL, dan tujuh
-# aplikasi Flustra lain di VPS yang sama. Cara menghitungnya di DEPLOYMENT.md §2.
-WA_MAX_SESSIONS=3
+# Era Chromium: 10, lalu 3 (17 Agu 2026) karena tiap sesi ±300-500 MB.
+# Sejak Baileys (satu websocket per sesi) dinaikkan ke 20 dan berjalan aman
+# (23 Okt 2026). RAM tetap dibagi dengan PHP, worker, penjadwal, MySQL, dan
+# aplikasi Flustra lain — pantau rss_mb di /health engine. DEPLOYMENT.md §2.
+WA_MAX_SESSIONS=20
 ```
 
 > `APP_DEBUG=true` di produksi akan menampilkan isi environment — termasuk password database dan secret HMAC — di halaman error. Pastikan tetap `false`.

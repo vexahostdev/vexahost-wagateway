@@ -3,56 +3,32 @@
 namespace App\Services\Providers;
 
 use App\Models\Message;
+use App\Models\SessionBackup;
 use App\Models\WaSession;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Driver whatsapp-web.js. Semua kerja beratnya ada di engine Node terpisah;
- * kelas ini hanya klien HTTP tipis ke engine tersebut.
+ * Klien HTTP tipis ke engine Node (Baileys). Semua kerja beratnya ada di sana.
+ *
+ * Namanya peninggalan era whatsapp-web.js dan sengaja dipertahankan:
+ * `wa_sessions.driver` mencatat `wwebjs` dan API menolak nilai lain.
  */
 class WwebjsProvider implements WhatsAppProvider
 {
-    public function startSession(WaSession $session): void
+    public function startSession(WaSession $session, bool $hanyaPulihkan = false): void
     {
-        $hasBackup = false;
-        $backupData = null;
-
-        if ($session->backups()->exists()) {
-            $backup = $session->latestBackup();
-            if ($backup && Storage::disk($backup->disk)->exists($backup->path)) {
-                $path = (string) $backup->path;
-                if (! str_ends_with($path, 'session.json')) {
-                    Log::warning('Backup sesi diabaikan: format lama (.zip/non-JSON) tidak kompatibel dengan Baileys', [
-                        'session_id' => $session->id,
-                        'path' => $path,
-                    ]);
-                } else {
-                    $raw = Storage::disk($backup->disk)->get($path);
-                    if (! mb_check_encoding($raw, 'UTF-8')) {
-                        Log::warning('Backup sesi diabaikan: berkas bukan UTF-8 yang sah', [
-                            'session_id' => $session->id,
-                            'path' => $path,
-                        ]);
-                    } elseif (! json_validate($raw)) {
-                        Log::warning('Backup sesi diabaikan: isi berkas bukan JSON yang valid', [
-                            'session_id' => $session->id,
-                            'path' => $path,
-                        ]);
-                    } else {
-                        $backupData = $raw;
-                        $hasBackup = true;
-                    }
-                }
-            }
-        }
+        // Cadangan terbaru yang LAYAK, bukan sekadar yang terbaru: cadangan
+        // rusak atau berformat lama (.zip era Chromium) dilewati supaya tidak
+        // menyembunyikan cadangan sehat di bawahnya.
+        $backupData = SessionBackup::terbaikUntuk($session->id)?->isiLayak();
 
         $payload = [
-            'has_backup' => $hasBackup,
+            'has_backup' => $backupData !== null,
+            'restore_only' => $hanyaPulihkan,
         ];
 
         if ($backupData !== null) {

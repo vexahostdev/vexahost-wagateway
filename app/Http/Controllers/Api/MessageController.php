@@ -103,6 +103,8 @@ class MessageController extends ApiController
         return $this->ok([
             'batch_id' => $result['batch_id'],
             'queued' => count($result['messages']),
+            // Bagian dari `queued` yang ditunda masa pemanasan nomor pengirim.
+            'scheduled' => count(array_filter($result['messages'], fn (Message $m) => $m->scheduled_at !== null)),
             'rejected' => $result['rejected'],
             'message_ids' => array_map(fn (Message $m) => $m->id, $result['messages']),
         ], 202);
@@ -210,6 +212,9 @@ class MessageController extends ApiController
             'batch_id' => $message->batch_id,
             'wa_message_id' => $message->wa_message_id,
             'created_at' => $message->created_at->toIso8601String(),
+            // Terisi kalau pesannya ditunda masa pemanasan nomor pengirim —
+            // supaya integrasi tahu pesannya pasti terkirim, hanya belum sekarang.
+            'scheduled_at' => $message->scheduled_at?->toIso8601String(),
             'sent_at' => $message->sent_at?->toIso8601String(),
             'delivered_at' => $message->delivered_at?->toIso8601String(),
             'read_at' => $message->read_at?->toIso8601String(),

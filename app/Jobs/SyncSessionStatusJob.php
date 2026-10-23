@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\WaSession;
 use App\Services\Notifications\Notifier;
 use App\Services\SessionService;
+use App\Support\AlasanPutus;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -46,10 +47,32 @@ class SyncSessionStatusJob implements ShouldQueue
                  | lagi satu menit kemudian, tiap menit, selamanya. Penegakan
                  | langganan yang bisa dibatalkan oleh penjadwal kita sendiri
                  | bukan penegakan.
+                 |
+                 | Dan hanya sesi yang punya kredensial untuk DIPULIHKAN —
+                 | `connected_at` terisi, aturan yang sama dengan
+                 | BootstrapController. Sesi yang belum pernah tertaut, atau yang
+                 | baru diputus tautannya, tidak punya apa pun untuk dipulihkan:
+                 | menjalankannya hanya memunculkan kode QR yang tidak ditatap
+                 | siapa pun, berganti tiap 20 detik, memakan satu slot engine,
+                 | dan dicoba lagi tiap menit sampai ambang.
                 */
                 if ($session->status !== 'disconnected'
                     || ! $session->auto_reconnect
+                    || $session->connected_at === null
                     || ! $session->workspace?->isActive()) {
+                    continue;
+                }
+
+                /*
+                 | Nomor yang ditolak WhatsApp atau diambil alih perangkat lain
+                 | tidak dicoba sendiri. Login berulang ke akun yang diblokir
+                 | menambah sinyal buruk; merebut balik perangkat yang diambil
+                 | alih memulai saling tendang. Dilewati DIAM-DIAM, sebelum
+                 | pemeriksaan ambang: penjelasannya sudah ada di `last_error`,
+                 | dan kabar "berhenti setelah sekian percobaan" untuk nomor
+                 | yang tidak pernah dicoba adalah kabar yang salah.
+                */
+                if (AlasanPutus::hentikanOtomatis($session->disconnect_reason) && ! $this->cobaSekaliLagi($session)) {
                     continue;
                 }
 
@@ -83,7 +106,7 @@ class SyncSessionStatusJob implements ShouldQueue
                 // penghitung yang tidak pernah naik justru pada kasus terburuk.
                 $session->catatPercobaanSambung();
 
-                $sessions->connect($session);
+                $sessions->connect($session, otomatis: true);
             } catch (\Throwable $e) {
                 Log::warning('Gagal menyelaraskan status sesi', [
                     'session_id' => $session->id,
@@ -91,6 +114,31 @@ class SyncSessionStatusJob implements ShouldQueue
                 ]);
             }
         }
+    }
+
+    /**
+     * Nomor yang diambil alih SEKALI dalam sehari dicoba lagi sekali, setelah
+     * jeda dua menit.
+     *
+     * Pengambil alih yang paling mungkin bukan orang lain, melainkan kita
+     * sendiri: engine di container lama yang belum mati saat deploy — terutama
+     * deploy pertama versi yang membawa kunci data, ketika engine lama belum
+     * mengenal kunci itu dan masih merebut balik perangkatnya. Tanpa satu
+     * percobaan ini, nomor yang sehat diam sampai pemiliknya menekan Hubungkan.
+     *
+     * Kalau diambil alih lagi dalam 24 jam, itu sungguhan, dan tidak ada
+     * percobaan kedua: merebut balik berulang kali adalah saling tendang yang
+     * membuat WhatsApp mencabut perangkatnya.
+     */
+    private function cobaSekaliLagi(WaSession $session): bool
+    {
+        if ($session->disconnect_reason !== AlasanPutus::REPLACED) {
+            return false;
+        }
+
+        $kejadian = $session->diambilAlih24Jam();
+
+        return $kejadian->count() === 1 && $kejadian->first()->lte(now()->subMinutes(2));
     }
 
     /**
@@ -108,25 +156,19 @@ class SyncSessionStatusJob implements ShouldQueue
     private function beriTahuMenyerah(WaSession $session): void
     {
         /*
-         | Dua kalimat, karena keduanya menuntut tindakan yang berbeda.
+         | Satu kalimat saja: yang sampai di sini selalu nomor yang PERNAH
+         | tertaut dan punya kredensial tersimpan, jadi menekan Hubungkan
+         | memang tindakan yang benar.
          |
-         | Nomor yang PERNAH tertaut punya kredensial tersimpan; menekan
-         | Hubungkan biasanya cukup. Nomor yang BELUM PERNAH tertaut tidak punya
-         | apa-apa untuk dipulihkan — yang dibutuhkan orang di situ adalah scan
-         | QR, dan menyuruhnya menekan Hubungkan berulang kali adalah menyuruh
-         | mengulang hal yang sudah terbukti tidak berhasil.
-         |
-         | Produksi 8 September 2026: satu nomor punya empat baris sesi yang
-         | tidak satu pun pernah `connected`. Empat kali orang mencoba, empat
-         | kali tidak ada yang memberi tahu apa yang sebenarnya kurang.
+         | Dulu ada kalimat kedua untuk nomor yang belum pernah tertaut
+         | (produksi 8 September 2026: satu nomor punya empat baris sesi yang
+         | tidak satu pun pernah `connected`). Nomor seperti itu sekarang tidak
+         | lagi disambungkan otomatis sama sekali — lihat penjagaan
+         | `connected_at` di atas — dan yang dibutuhkan pemiliknya memang scan
+         | QR, bukan percobaan otomatis yang memunculkan QR tanpa penonton.
         */
-        $kalimat = $session->connected_at === null
-            ? 'Nomor ini belum pernah berhasil ditautkan setelah '
-                .$session->connect_failures.' percobaan, jadi kami berhenti mencoba. '
-                .'Buka Hubungkan lalu scan kode QR-nya dari WhatsApp di ponsel '
-                .'(Perangkat tertaut). Kalau kode QR-nya tidak pernah muncul, hubungi kami.'
-            : 'Kami berhenti mencoba menyambungkan nomor ini setelah '
-                .$session->connect_failures.' percobaan. Tekan Hubungkan untuk mencoba lagi.';
+        $kalimat = 'Kami berhenti mencoba menyambungkan nomor ini setelah '
+            .$session->connect_failures.' percobaan. Tekan Hubungkan untuk mencoba lagi.';
 
         if ($session->last_error !== $kalimat) {
             $session->forceFill(['last_error' => $kalimat])->save();

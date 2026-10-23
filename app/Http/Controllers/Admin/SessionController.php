@@ -53,6 +53,25 @@ class SessionController extends Controller
     }
 
     /**
+     * Satu sesi beserta riwayat koneksinya.
+     *
+     * Halaman yang menjawab "kenapa nomor ini putus" dalam hitungan detik.
+     * Sebelumnya jawabannya hanya ada di log Coolify — yang tidak bertahan
+     * melewati satu kali deploy, padahal deploy justru salah satu pemicunya.
+     */
+    public function show(string $id): View
+    {
+        $session = WaSession::withTrashed()->with('workspace')->findOrFail($id);
+
+        return view('admin.session-detail', [
+            'session' => $session,
+            'kejadian' => $session->events()->latest('created_at')->latest('id')->limit(100)->get(),
+            'cadangan' => $session->backups()->orderByDesc('backed_up_at')->orderByDesc('id')->get(),
+            'batasPercobaan' => WaSession::BATAS_PERCOBAAN_SAMBUNG,
+        ]);
+    }
+
+    /**
      * Memutus sesi dari panel.
      *
      * `disconnect()`, tidak pernah `logout()`. Logout membuang kredensial di

@@ -9,7 +9,9 @@ use App\Services\MessageDispatcher;
 use App\Services\Notifications\BillingMessages;
 use App\Services\Notifications\Notifier;
 use App\Services\Notifications\WhatsAppNotifier;
+use App\Services\RemPengiriman;
 use App\Services\WebhookDispatcher;
+use App\Support\AlasanPutus;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,15 +87,20 @@ class EngineEventController extends Controller
 
     private function onReady(WaSession $session, array $payload): void
     {
+        $nomor = PhoneNumber::normalize($payload['phone_number'] ?? null);
+
+        $session->catatNomorTertaut($nomor);
+
         $session->update([
             'status' => 'connected',
-            'phone_number' => PhoneNumber::normalize($payload['phone_number'] ?? null),
+            'phone_number' => $nomor,
             'push_name' => $payload['push_name'] ?? null,
             'qr_payload' => null,
             'qr_expires_at' => null,
             'connected_at' => now(),
             'last_seen_at' => now(),
             'last_error' => null,
+            'disconnect_reason' => null,
             // Satu-satunya bukti yang tidak bisa dibantah bahwa penyambungannya
             // berhasil. Penghitung percobaan otomatis kembali nol HANYA di sini
             // dan pada permintaan manusia — bukan pada `connecting`, yang justru
@@ -101,20 +108,60 @@ class EngineEventController extends Controller
             'connect_failures' => 0,
         ]);
 
+        $session->catatKejadian('connected');
+
         $this->notifySessionStatus($session, 'connected');
     }
 
     private function onDisconnected(WaSession $session, array $payload): void
     {
-        $sempatTersambung = $session->connected_at !== null && $session->status === 'connected';
+        $alasan = is_string($payload['reason'] ?? null) ? $payload['reason'] : null;
+        $kode = is_numeric($payload['status_code'] ?? null) ? (int) $payload['status_code'] : null;
 
-        $session->update([
+        $sempatTersambung = $session->connected_at !== null && $session->status === 'connected';
+        $penanda = 'session-down:'.$session->id.':'.optional($session->connected_at)->timestamp;
+
+        // `last_error` tampil di kartu sesi dan di modal QR — muka pengguna,
+        // jadi diisi kalimat, bukan kode mentah dari engine.
+        $perubahan = [
             'status' => 'disconnected',
             'qr_payload' => null,
-            'last_error' => $payload['reason'] ?? null,
-        ]);
+            'last_error' => AlasanPutus::kalimat($alasan),
+            // Dibaca penjadwal dan bootstrap: nomor yang diblokir atau diambil
+            // alih tidak dicoba sendiri sampai manusia menekan Hubungkan.
+            'disconnect_reason' => $alasan,
+        ];
 
-        $this->notifySessionStatus($session, 'disconnected');
+        if (AlasanPutus::perluTautUlang($alasan)) {
+            // Sesinya kembali ke keadaan "belum tertaut", sama dengan setelah
+            // Putus tautan. Tanpa ini penjadwal dan bootstrap terus mencoba
+            // memulihkan nomor yang tidak punya kredensial untuk dipulihkan.
+            $perubahan += [
+                'phone_number' => null,
+                'push_name' => null,
+                'connected_at' => null,
+                'connect_failures' => 0,
+            ];
+        }
+
+        $session->update($perubahan);
+
+        if (AlasanPutus::cadanganMati($alasan)) {
+            $session->hapusCadangan();
+        }
+
+        $session->catatKejadian('disconnected', $alasan, $kode);
+
+        $this->notifySessionStatus($session, 'disconnected', $alasan);
+
+        // Diambil alih untuk pertama kalinya hari ini dicoba ulang sendiri dua
+        // menit lagi (SyncSessionStatusJob::cobaSekaliLagi) — penyebab
+        // tersering adalah container lama saat deploy. Mengabari pemiliknya
+        // sekarang berarti kabar menakutkan untuk sesuatu yang pulih sendiri.
+        // Webhook di atas tetap terkirim: itu keadaan sebenarnya.
+        if ($alasan === AlasanPutus::REPLACED && $session->diambilAlih24Jam()->count() === 1) {
+            return;
+        }
 
         /*
          | Pemberitahuan paling berharga di produk ini.
@@ -133,11 +180,9 @@ class EngineEventController extends Controller
          | disconnect dari satu kejadian yang sama tidak berubah jadi spam.
         */
         if ($sempatTersambung && $session->workspace) {
-            $penanda = 'session-down:'.$session->id.':'.optional($session->connected_at)->timestamp;
-
             app(WhatsAppNotifier::class)->toWorkspace(
                 $session->workspace,
-                BillingMessages::sessionDisconnected($session),
+                BillingMessages::sessionDisconnected($session, $alasan),
                 $penanda,
                 6,
             );
@@ -149,8 +194,10 @@ class EngineEventController extends Controller
                 workspace: $session->workspace,
                 type: 'session.disconnected',
                 title: "Nomor {$session->name} terputus",
-                body: 'Pesan keluar dari nomor itu berhenti terkirim. Buka halaman Sesi untuk '
-                    .'menghubungkannya lagi — kredensialnya masih tersimpan.',
+                body: AlasanPutus::perluTautUlang($alasan)
+                    ? 'Nomor itu perlu ditautkan ulang lewat scan kode QR. Buka halaman Sesi untuk menghubungkannya.'
+                    : 'Pesan keluar dari nomor itu berhenti terkirim. Buka halaman Sesi untuk '
+                        .'menghubungkannya lagi — kredensialnya masih tersimpan.',
                 url: route('sessions.index', absolute: false),
                 level: 'danger',
                 dedupe: $penanda,
@@ -165,6 +212,8 @@ class EngineEventController extends Controller
             'qr_payload' => null,
             'last_error' => $payload['message'] ?? 'Autentikasi WhatsApp gagal.',
         ]);
+
+        $session->catatKejadian('auth_failure', null, null, $payload['message'] ?? null);
 
         /*
          | Kegagalan yang BENAR-BENAR dilaporkan ikut dihitung.
@@ -217,6 +266,25 @@ class EngineEventController extends Controller
             return;
         }
 
+        $waId = $payload['wa_message_id'] ?? null;
+
+        /*
+         | Pesan yang sama bisa datang dua kali.
+         |
+         | WhatsApp mengirim ulang pesan yang penerimaannya belum sempat
+         | dikonfirmasi sebelum sambungan putus — dan sambungan putus tiap
+         | deploy. Tanpa penyaring ini satu pesan menjadi dua baris dan dua
+         | webhook, dan integrasi yang membalas otomatis menjawabnya dua kali.
+         | Nilai null diperiksa lebih dulu: `where(kolom, null)` menjadi
+         | `whereNull` dan akan cocok dengan pesan mana pun tanpa id.
+        */
+        if ($waId !== null && Message::where('wa_session_id', $session->id)
+            ->where('direction', 'inbound')
+            ->where('wa_message_id', $waId)
+            ->exists()) {
+            return;
+        }
+
         $chatId = $payload['chat_id'] ?? null;
         if (is_string($chatId) && str_ends_with($chatId, '@s.whatsapp.net')) {
             $chatId = substr($chatId, 0, -strlen('@s.whatsapp.net')).'@c.us';
@@ -226,7 +294,7 @@ class EngineEventController extends Controller
             'workspace_id' => $session->workspace_id,
             'wa_session_id' => $session->id,
             'direction' => 'inbound',
-            'wa_message_id' => $payload['wa_message_id'] ?? null,
+            'wa_message_id' => $waId,
             'chat_id' => $chatId,
             'from_number' => PhoneNumber::normalize($payload['from'] ?? null),
             'to_number' => $session->phone_number,
@@ -246,7 +314,20 @@ class EngineEventController extends Controller
             'body' => $message->body,
             'is_group' => str_ends_with((string) $message->chat_id, '@g.us'),
             'received_at' => $message->created_at->toIso8601String(),
+            // Waktu pengirim mengirimnya, dan penanda pesan yang menumpuk selama
+            // nomor offline. Tumpukan itu datang sekaligus tiap sesi tersambung
+            // lagi — setiap deploy — dan tanpa dua kolom ini integrasi yang
+            // membalas otomatis menjawab seluruhnya dalam satu ledakan.
+            'sent_at' => is_numeric($payload['timestamp'] ?? null) && (int) $payload['timestamp'] > 0
+                ? now()->setTimestamp((int) $payload['timestamp'])->toIso8601String()
+                : null,
+            'is_backlog' => (bool) ($payload['is_backlog'] ?? false),
         ]);
+
+        // STOP di grup bukan permintaan berhenti dari satu orang ke bisnis ini.
+        if (! str_ends_with((string) $message->chat_id, '@g.us') && $message->from_number !== null) {
+            app(RemPengiriman::class)->catatJawaban($session, $message->from_number, $message->body);
+        }
     }
 
     /**
@@ -306,13 +387,16 @@ class EngineEventController extends Controller
         ], $message->api_key_id);
     }
 
-    private function notifySessionStatus(WaSession $session, string $status): void
+    private function notifySessionStatus(WaSession $session, string $status, ?string $alasan = null): void
     {
         $this->webhooks->dispatch($session->workspace, WebhookDispatcher::EVENT_SESSION_STATUS, [
             'session_id' => $session->id,
             'name' => $session->name,
             'status' => $status,
             'phone_number' => $session->phone_number,
+            // Untuk `disconnected`: sistem pelanggan perlu tahu apakah nomornya
+            // akan pulih sendiri atau harus discan ulang oleh manusia.
+            'reason' => $alasan,
         ]);
     }
 }

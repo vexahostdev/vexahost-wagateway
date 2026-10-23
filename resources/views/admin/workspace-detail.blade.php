@@ -301,7 +301,9 @@
                         @forelse ($workspace->sessions as $sesi)
                             @php $ls = \App\Support\StatusBadge::session($sesi->status); @endphp
                             <tr>
-                                <td class="px-5 py-2.5 font-medium">{{ $sesi->name }}</td>
+                                <td class="px-5 py-2.5 font-medium">
+                                    <a href="{{ route('admin.sessions.show', $sesi->id) }}" class="hover:text-primary hover:underline">{{ $sesi->name }}</a>
+                                </td>
                                 <td class="px-5 py-2.5"><x-badge :warna="$ls['warna']" titik>{{ $ls['label'] }}</x-badge></td>
                                 <td class="px-5 py-2.5 font-mono text-xs text-muted-foreground">{{ $sesi->phone_number ?? '—' }}</td>
                                 <td class="px-5 py-2.5 text-muted-foreground">{{ $sesi->connected_at?->translatedFormat('j M Y, H:i') ?? 'belum pernah' }}</td>

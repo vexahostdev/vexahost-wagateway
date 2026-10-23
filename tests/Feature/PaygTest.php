@@ -494,7 +494,7 @@ class PaygTest extends TestCase
                 return ['wa_message_id' => 'wamid.'.$message->id, 'raw' => []];
             }
 
-            public function startSession(WaSession $session): void {}
+            public function startSession(WaSession $session, bool $hanyaPulihkan = false): void {}
 
             public function stopSession(WaSession $session): void {}
 

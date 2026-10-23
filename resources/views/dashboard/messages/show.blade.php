@@ -44,6 +44,17 @@
         </a>
     </div>
 
+    @if ($message->status === 'queued' && $message->scheduled_at?->isFuture())
+        <div class="mb-5 rounded-xl border border-border bg-muted/40 px-4 py-3.5 text-sm">
+            <p class="font-medium">Dijadwalkan {{ $message->scheduled_at->translatedFormat('j F Y, H:i') }}</p>
+            <p class="mt-1 leading-relaxed text-muted-foreground">
+                Nomor pengirimnya masih dalam masa pemanasan, dan jatah hari ini sudah terpakai. Pesannya tidak hilang
+                — ia dikirim otomatis pada waktu di atas. Pemilik nomor yang sudah lama aktif bisa melewati masa
+                pemanasan dari halaman Sesi WhatsApp.
+            </p>
+        </div>
+    @endif
+
     @if ($message->error)
         <div class="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3.5 text-sm text-destructive">
             <p class="font-medium">Pengiriman gagal</p>

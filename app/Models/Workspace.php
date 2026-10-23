@@ -116,6 +116,11 @@ class Workspace extends Model
         return $this->hasMany(MessageTemplate::class);
     }
 
+    public function optOuts(): HasMany
+    {
+        return $this->hasMany(OptOut::class);
+    }
+
     public function webhooks(): HasMany
     {
         return $this->hasMany(Webhook::class);

@@ -77,6 +77,30 @@
                         @if (! $terkunci && $session->last_error)
                             <p class="mt-1.5 max-w-56 text-xs leading-relaxed text-destructive">{{ $session->last_error }}</p>
                         @endif
+
+                        {{-- Masa pemanasan ditampilkan di samping statusnya, bukan
+                             di halaman lain: pesan yang ditunda terasa seperti
+                             gateway yang lambat kalau alasannya tidak terlihat
+                             di tempat orang pertama kali mencarinya. --}}
+                        @php $tahap = $pemanasan[$session->id] ?? null; @endphp
+                        @if ($tahap)
+                            <div class="mt-1.5 max-w-60 text-xs leading-relaxed text-muted-foreground">
+                                <p><span class="font-medium text-foreground">Masa pemanasan</span> · hari {{ $tahap['hari'] }} dari {{ $tahap['sampai'] }}</p>
+                                <p>
+                                    {{ number_format($tahap['terpakai'], 0, ',', '.') }}/{{ number_format($tahap['batas'], 0, ',', '.') }} pesan hari ini
+                                    @if ($tahap['tertunda'] > 0)
+                                        · {{ number_format($tahap['tertunda'], 0, ',', '.') }} terjadwal ke hari berikutnya
+                                    @endif
+                                </p>
+                                @unless ($terkunci)
+                                    <form method="POST" action="{{ route('sessions.warmup.skip', $session->id) }}"
+                                          data-konfirmasi="Lewati masa pemanasan untuk {{ $session->name }}? Lakukan ini hanya kalau nomornya sudah lama aktif dipakai di ponsel. Nomor baru yang langsung mengirim ratusan pesan ke orang yang belum mengenalnya adalah penyebab tersering nomor diblokir WhatsApp.">
+                                        @csrf
+                                        <button class="mt-0.5 font-medium text-primary hover:underline">Lewati pemanasan</button>
+                                    </form>
+                                @endunless
+                            </div>
+                        @endif
                     </td>
                     <td class="px-4 py-3 sm:px-3">
                         <div class="flex flex-wrap justify-end gap-1.5">

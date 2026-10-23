@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { bacaBerkas, namaBerkasSah, nilaiKredensial, tulisUlangKredensial } from '../auth-state.js';
 import { config } from '../config.js';
 import { laravel } from '../laravel.js';
 import { logger } from '../logger.js';
@@ -26,6 +27,14 @@ export class LaravelStore {
 
     /**
      * Menyimpan seluruh berkas state Baileys dari folder sesi ke Laravel.
+     *
+     * Berkas dibaca di bawah kunci yang sama dengan penulisnya, jadi tidak ada
+     * berkas setengah tertulis yang ikut tercadang. Dan kalau creds.json-nya
+     * sendiri tidak layak, pencadangan dibatalkan: Laravel hanya menyimpan
+     * beberapa cadangan terakhir, dan satu cadangan rusak yang masuk berarti
+     * satu cadangan sehat yang terdorong keluar.
+     *
+     * @returns {Promise<boolean>} apakah cadangan benar-benar terkirim
      */
     async save(sessionOrId) {
         const sessionId = toSessionId(sessionOrId);
@@ -37,15 +46,30 @@ export class LaravelStore {
         } catch (err) {
             if (err.code === 'ENOENT') {
                 logger.warn({ sessionId }, 'Folder sesi tidak ditemukan saat akan menyimpan backup');
-                return;
+                return false;
             }
             throw err;
         }
 
         const files = {};
         for (const filename of entries) {
-            const filePath = path.join(sessionDir, filename);
-            files[filename] = await readFile(filePath, 'utf-8');
+            // Berkas sementara dari penulisan atomik yang sedang berjalan
+            // bukan bagian dari state — menyalinnya berarti memulihkan sampah.
+            if (!namaBerkasSah(filename)) {
+                continue;
+            }
+
+            const isi = await bacaBerkas(path.join(sessionDir, filename));
+
+            if (isi !== null) {
+                files[filename] = isi;
+            }
+        }
+
+        if (nilaiKredensial(files['creds.json']) !== 'tertaut') {
+            logger.warn({ sessionId }, 'Backup dibatalkan: creds.json rusak atau belum tertaut, cadangan lama dibiarkan');
+
+            return false;
         }
 
         const payload = JSON.stringify({
@@ -60,6 +84,20 @@ export class LaravelStore {
         await laravel.uploadBackup(sessionId, buffer, digest);
 
         logger.info({ sessionId, bytes: buffer.length, fileCount: Object.keys(files).length }, 'Backup sesi terkirim');
+
+        return true;
+    }
+
+    /**
+     * Isi cadangan dari Laravel sebagai `{ namaBerkas: isi }`, tanpa menulis
+     * apa pun — pemanggil yang memutuskan apakah cadangan itu layak dipakai.
+     */
+    async ambilBerkas(sessionOrId) {
+        const sessionId = toSessionId(sessionOrId);
+        const buffer = await laravel.downloadBackup(sessionId);
+        const payload = JSON.parse(buffer.toString('utf-8'));
+
+        return payload?.files && typeof payload.files === 'object' ? payload.files : {};
     }
 
     /**
@@ -68,48 +106,24 @@ export class LaravelStore {
     async extract(sessionOrId, targetPath) {
         const sessionId = toSessionId(sessionOrId);
         const destDir = targetPath ?? path.join(config.dataPath, sessionId);
+        const files = await this.ambilBerkas(sessionId);
 
-        const buffer = await laravel.downloadBackup(sessionId);
-        const payload = JSON.parse(buffer.toString('utf-8'));
+        await tulisUlangKredensial(destDir, files);
 
-        await mkdir(destDir, { recursive: true });
-
-        const incomingFiles = payload.files ?? {};
-        const incomingNames = new Set(Object.keys(incomingFiles));
-
-        // Tulis semua berkas dari backup
-        for (const [filename, content] of Object.entries(incomingFiles)) {
-            await writeFile(path.join(destDir, filename), content, 'utf-8');
-        }
-
-        // Bersihkan berkas lokal yang sudah tidak ada di backup
-        try {
-            const existing = await readdir(destDir);
-            for (const file of existing) {
-                if (!incomingNames.has(file)) {
-                    await rm(path.join(destDir, file), { force: true });
-                }
-            }
-        } catch {
-            // Abaikan jika pembersihan sisa gagal
-        }
-
-        logger.info({ sessionId, bytes: buffer.length, fileCount: incomingNames.size }, 'Backup sesi dipulihkan');
+        logger.info({ sessionId, fileCount: Object.keys(files).length }, 'Backup sesi dipulihkan');
     }
 
     /**
-     * Menghapus backup di Laravel dan folder lokal sesi.
+     * Menghapus backup di Laravel.
+     *
+     * Folder lokal sengaja TIDAK ikut dihapus di sini. `logout()` memanggil ini
+     * di latar belakang sesudah merespons; kalau pelanggan langsung menautkan
+     * ulang, penghapusan yang telat akan mengenai folder tautan barunya.
+     * `logout()` sudah membuang folder lokalnya sendiri.
      */
     async delete(sessionOrId) {
         const sessionId = toSessionId(sessionOrId);
         await laravel.deleteBackup(sessionId);
-
-        const sessionDir = path.join(config.dataPath, sessionId);
-        try {
-            await rm(sessionDir, { recursive: true, force: true });
-        } catch {
-            // Abaikan jika folder sudah tidak ada
-        }
     }
 }
 

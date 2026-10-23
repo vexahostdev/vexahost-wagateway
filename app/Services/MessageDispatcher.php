@@ -23,7 +23,10 @@ use RuntimeException;
 class MessageDispatcher
 {
     /**
-     * @param  array{type?: string, body?: ?string, media_path?: ?string, media_mime?: ?string, media_filename?: ?string, batch_id?: ?string}  $attributes
+     * `is_otp` membebaskan pesan dari penundaan masa pemanasan dan dari daftar
+     * berhenti berlangganan — lihat RemPengiriman. Ia tidak disimpan.
+     *
+     * @param  array{type?: string, body?: ?string, media_path?: ?string, media_mime?: ?string, media_filename?: ?string, batch_id?: ?string, is_otp?: bool}  $attributes
      */
     public function queue(WaSession $session, string $to, array $attributes = []): Message
     {
@@ -47,6 +50,19 @@ class MessageDispatcher
             throw new RuntimeException("Nomor tujuan tidak valid: {$to}");
         }
 
+        $chatId = PhoneNumber::toChatId($to);
+
+        // Rem pengiriman berjalan SEBELUM pesan dicatat dan kuota dinaikkan:
+        // pesan yang ditolak di sana tidak boleh memotong kuota siapa pun.
+        // Diambil dari container, bukan disuntikkan — alasannya sama dengan
+        // notifier di bawah.
+        $jadwal = app(RemPengiriman::class)->periksa(
+            $session,
+            $normalized,
+            $chatId,
+            (bool) ($attributes['is_otp'] ?? false),
+        );
+
         $message = Message::create([
             'workspace_id' => $workspace->id,
             'wa_session_id' => $session->id,
@@ -64,7 +80,7 @@ class MessageDispatcher
             */
             'api_key_id' => $attributes['api_key_id'] ?? null,
             'direction' => 'outbound',
-            'chat_id' => PhoneNumber::toChatId($to),
+            'chat_id' => $chatId,
             'to_number' => $normalized ?? $to,
             'type' => $attributes['type'] ?? 'text',
             'body' => $attributes['body'] ?? null,
@@ -72,15 +88,21 @@ class MessageDispatcher
             'media_mime' => $attributes['media_mime'] ?? null,
             'media_filename' => $attributes['media_filename'] ?? null,
             'batch_id' => $attributes['batch_id'] ?? null,
+            'scheduled_at' => $jadwal,
             'status' => 'queued',
         ]);
 
         // Kuota dinaikkan saat antre, bukan saat terkirim: kalau dihitung
         // belakangan, satu workspace bisa mengantrekan puluhan ribu pesan dulu
-        // lalu baru ketahuan melewati batas.
+        // lalu baru ketahuan melewati batas. Pesan yang ditunda masa pemanasan
+        // ikut dihitung di sini — ia pasti terkirim, hanya belum hari ini.
         $this->incrementUsage($workspace, 'messages_sent');
 
-        SendMessageJob::dispatch($message->id);
+        $job = SendMessageJob::dispatch($message->id);
+
+        if ($jadwal !== null) {
+            $job->delay($jadwal);
+        }
 
         return $message;
     }
